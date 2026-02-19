@@ -1,7 +1,6 @@
 from django.core.management.base import BaseCommand
-from django.conf import settings
-from candidates.models import Candidate,CandidateDataProduct
-from candidates.utils import fetch_sdss_cutout
+from app.candidates.models import Candidate,CandidateDataProduct
+from app.candidates.utils import fetch_sdss_cutout
 
 class Command(BaseCommand):
     help = 'Update SDSS data for all candidates'

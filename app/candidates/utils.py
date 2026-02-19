@@ -34,7 +34,7 @@ from django.utils.dateparse import parse_datetime
 # Local application imports
 from .models import Candidate, CandidateAlert, CandidateDataProduct, CandidatePhotometry
 from tom_dataproducts.models import ReducedDatum
-from tom_targets.models import Target
+from app.tom_targets.models import Target
 from .photometry_utils import get_atlas_fp, get_ztf_fp, add_photometry_from_last_report
 from .gal_association import associate_galaxy
 
