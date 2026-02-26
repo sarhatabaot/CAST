@@ -1,4 +1,3 @@
-import clickhouse_connect
 import pandas as pd
 from astropy.time import Time
 from astroplan import Observer

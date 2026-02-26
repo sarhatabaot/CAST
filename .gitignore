@@ -4,14 +4,11 @@ _static/
 env/
 custom_code/
 data/
-erez_tom/
 static/
 tmp/
 tests.ipynb
-manage.py
 CAST.log
 tom.log
-app/candidates/migrations/*
 
 .idea
 .env

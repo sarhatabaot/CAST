@@ -7,7 +7,6 @@ from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.module_loading import import_string
-
 from tom_targets.base_models import BaseTarget
 
 logger = logging.getLogger(__name__)

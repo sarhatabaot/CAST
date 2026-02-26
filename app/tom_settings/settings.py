@@ -54,23 +54,23 @@ INSTALLED_APPS = [
     'django_extensions',
     'django_tasks',
     'django_tasks.backends.database',
+    'django_tables2',
     'guardian',
     'tom_common',
     'django_comments',
-    'avatar',
     'bootstrap4',
     'crispy_bootstrap4',
     'crispy_forms',
     'rest_framework',
     'rest_framework.authtoken',
     'django_filters',
-    'django_gravatar',
     'django_htmx',
     'tom_targets',
     'tom_alerts',
     'tom_catalogs',
     'tom_observations',
     'tom_dataproducts',
+    'cast',
     'candidates',
     'FP',
     'LAST',
@@ -86,7 +86,6 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'marshal_tom.middleware.CommentPermissionMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django_htmx.middleware.HtmxMiddleware',
@@ -398,7 +397,7 @@ except ImportError:
 # Astro-COLIBRI settings
 ASTRO_COLIBRI = {
     'api_url': env.str('ASTRO_COLIBRI_API_URL', default='https://astro-colibri.science'),
-    'auth_file': env.str('ASTRO_COLIBRI_AUTH_FILE', default='/app/astro_colibri_auth.txt'),
+    'auth_file': env.str('ASTRO_COLIBRI_AUTH_FILE', default='./astro_colibri_auth.txt'),
 }
 
 LAST_DB = env.json('LAST_DB', default={

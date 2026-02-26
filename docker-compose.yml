@@ -8,7 +8,6 @@ services:
       - ./app/large_files:/app/large_files
       - static_data:/app/static
       - media_data:/app/data
-      - .db.sqlite3:/app/.db.sqlite3
       - /mnt/euclid/last/data/transients:/transients:ro
     ports:
       - "8000:8000"
@@ -26,7 +25,7 @@ services:
 
   scheduler:
     image: mcuadros/ofelia:latest
-    container_name: ofelia_scheduler
+    container_name: ofelia_scheduler_2
     depends_on:
       - web
     command: daemon --docker
@@ -55,6 +54,22 @@ services:
       timeout: 3s
       retries: 5
 
+  db:
+    image: postgres:16
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_DATABASE}
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -h localhost -p 5432 -U ${DB_USER} -d ${DB_DATABASE}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   migrate:
     build: ./app
     entrypoint: uv run manage.py migrate
@@ -81,5 +96,6 @@ services:
     restart: "no"
 
 volumes:
+  postgres_data:
   media_data:
   static_data:
