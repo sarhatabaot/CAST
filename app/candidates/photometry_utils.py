@@ -26,6 +26,9 @@ from .models import CandidatePhotometry
 # Logging
 import logging
 from datetime import timezone as dt_timezone
+
+from .services.parsing import ensure_aware_utc
+
 logger = logging.getLogger(__name__)
 
 
@@ -38,7 +41,7 @@ def photometry_exists(candidate, obs_date, magnitude, magnitude_error, filter_ba
     """
     Check if a photometry entry already exists for a given candidate, observation date, magnitude, and filter.
     """
-    obs_date = make_aware(obs_date)
+    obs_date = ensure_aware_utc(obs_date)
     query = CandidatePhotometry.objects.filter(
         candidate=candidate,
         obs_date__gte=obs_date - timedelta(seconds=5),  # Allowing 5s tolerance
@@ -211,46 +214,51 @@ def get_ztf_fp(candidate, days_ago=10):
     lasair_settings = settings.BROKERS.get('LASAIR', {})
     api_token = lasair_settings.get('api_token')
     if not api_token:
-        logger.error("LASAIR API credentials not set.")
-        raise ValueError("LASAIR API credentials not set.")
-    L = lasair_client(lasair_settings['api_token'], endpoint=LASAIR_ENDPOINT)
-
-    result = L.cone(ra=candidate.ra, dec=candidate.dec,
-                    radius=LASAIR_CONE_RADIUS, requestType='nearest')
-    if 'object' in result:
-        logger.info(f"Found {result['object']} at separation {result['separation']:.2f} with radius {LASAIR_CONE_RADIUS}")
-    else:
-        logger.info('No object found at radius %f' % LASAIR_CONE_RADIUS)
+        logger.info(f"Skipping ZTF forced photometry for candidate {candidate.id}: LASAIR credentials not configured")
         return None
     
-    object_id = result['object']
-    lcs = L.lightcurves([object_id])
-    dfresult = pd.DataFrame(lcs[0]['candidates']) 
-    dfresult = dfresult[dfresult['jd'] > Time.now().jd - days_ago]
+    try:
+        L = lasair_client(lasair_settings['api_token'], endpoint=LASAIR_ENDPOINT)
 
-    for obs in dfresult.iloc:
-        obs_date = Time(obs.jd,format='jd').to_datetime()
-        filter_band = 'g' if obs.fid ==1 else 'r'  # fid=1 green, fid=2 red
-        if not pd.isna(obs.candid):
-            magnitude = obs.magpsf  # Detection
-            magnitude_error = obs.sigmapsf
-            limit = None
+        result = L.cone(ra=candidate.ra, dec=candidate.dec,
+                        radius=LASAIR_CONE_RADIUS, requestType='nearest')
+        if 'object' in result:
+            logger.info(f"Found {result['object']} at separation {result['separation']:.2f} with radius {LASAIR_CONE_RADIUS}")
         else:
-            magnitude = None  # Non detection
-            limit = obs.diffmaglim
-            magnitude_error = None
+            logger.info('No object found at radius %f' % LASAIR_CONE_RADIUS)
+            return None
         
-        if not photometry_exists(candidate, obs_date, magnitude,
-                                 magnitude_error, filter_band=filter_band):
-            CandidatePhotometry.objects.create(
-                candidate=candidate,
-                obs_date=make_aware(obs_date),
-                magnitude=magnitude,  # Null if non-detection
-                magnitude_error=magnitude_error,
-                filter_band=filter_band,
-                telescope="ZTF",
-                limit=limit
-            )
+        object_id = result['object']
+        lcs = L.lightcurves([object_id])
+        dfresult = pd.DataFrame(lcs[0]['candidates']) 
+        dfresult = dfresult[dfresult['jd'] > Time.now().jd - days_ago]
+
+        for obs in dfresult.iloc:
+            obs_date = Time(obs.jd,format='jd').to_datetime()
+            filter_band = 'g' if obs.fid ==1 else 'r'  # fid=1 green, fid=2 red
+            if not pd.isna(obs.candid):
+                magnitude = obs.magpsf  # Detection
+                magnitude_error = obs.sigmapsf
+                limit = None
+            else:
+                magnitude = None  # Non detection
+                limit = obs.diffmaglim
+                magnitude_error = None
+            
+            if not photometry_exists(candidate, obs_date, magnitude,
+                                     magnitude_error, filter_band=filter_band):
+                CandidatePhotometry.objects.create(
+                    candidate=candidate,
+                    obs_date=make_aware(obs_date),
+                    magnitude=magnitude,  # Null if non-detection
+                    magnitude_error=magnitude_error,
+                    filter_band=filter_band,
+                    telescope="ZTF",
+                    limit=limit
+                )
+    except Exception as e:
+        logger.error(f"Error getting ZTF photometry for candidate {candidate.id}: {e}")
+        return None
 
 
 def generate_photometry_graph(candidate):

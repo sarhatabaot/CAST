@@ -15,7 +15,7 @@ CLASSIFICATION_CHOICES = [
 
 
 class Candidate(models.Model):
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=150)
     ra = models.FloatField()  # Right Ascension
     dec = models.FloatField()  # Declination
     file_source = models.FileField(upload_to='candidate_files/')  # Optional: To track file origin

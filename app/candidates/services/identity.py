@@ -26,9 +26,14 @@ def check_candidate_exists_by_cone(ra, dec, radius_arcsec=3):
     exists = matching_candidates.exists()
     return exists, matching_candidates.first() if exists else None
 
-def handle_candidate_identity(payload, file):
+def handle_candidate_identity(payload, file, lasair_enabled: bool = None):
     """
     Handle candidate existence check and creation.
+
+    Args:
+        payload: Parsed alert payload
+        file: Ingested json file object
+        lasair_enabled: Cached LASAIR credential status (optional)
 
     Returns:
         (candidate, is_new)
@@ -65,9 +70,18 @@ def handle_candidate_identity(payload, file):
             # update candidate cutouts
             update_candidate_cutouts(existing_candidate)
 
-            # forced photometry
+            # forced photometry - only if credentials are available
             get_atlas_fp(existing_candidate)
-            get_ztf_fp(existing_candidate)
+            
+            # Check credentials before ZTF photometry
+            if lasair_enabled is not None:
+                should_do_ztf = lasair_enabled
+            else:
+                from django.conf import settings
+                should_do_ztf = bool(settings.LASAIR_API_KEY)
+            
+            if should_do_ztf:
+                get_ztf_fp(existing_candidate)
 
         if not existing_candidate.host_galaxy:
             gal_name, dist_Mpc, z = associate_galaxy(

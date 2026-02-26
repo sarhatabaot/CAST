@@ -28,7 +28,7 @@ class IngestionResult(Enum):
     CANDIDATE_EXISTS = "candidate_exists"
     UNKNOWN_ERROR = "unknown_error"
 
-def process_json_file(file, check_tns: bool = True) -> tuple[int, IngestionResult]:
+def process_json_file(file, lasair_enabled: bool = None) -> tuple[int, IngestionResult, str]:
     """
     Processes the uploaded JSON file and adds candidates to the database.
     :param file: Ingested json file object
@@ -38,7 +38,7 @@ def process_json_file(file, check_tns: bool = True) -> tuple[int, IngestionResul
         payload = parse_json_file(file)
     except ValueError as e:
         logger.warning(str(e))
-        return 0, IngestionResult.PARSE_FAILED
+        return 0, IngestionResult.PARSE_FAILED, None
 
     logger.info(f"Processing file: {file.name}")
 
@@ -47,14 +47,14 @@ def process_json_file(file, check_tns: bool = True) -> tuple[int, IngestionResul
     ra = payload.ra
     dec = payload.dec
 
-    candidate, is_new = handle_candidate_identity(payload, file)
+    candidate, is_new = handle_candidate_identity(payload, file, lasair_enabled)
 
     if not is_new:
         logger.info(
             f"Candidate already exists for {file.name} "
             f"(RA={payload.ra}, Dec={payload.dec})"
         )
-        return 0, IngestionResult.CANDIDATE_EXISTS
+        return 0, IngestionResult.CANDIDATE_EXISTS, None
 
     instr_cfg = CAST_SETTINGS["instruments"]
     # ---- AT (old JSON format) photometry ----
@@ -126,7 +126,13 @@ def process_json_file(file, check_tns: bool = True) -> tuple[int, IngestionResul
     # ---- Forced photometry ----
     try_forced_photometry(candidate, get_atlas_fp, "Atlas")
 
-    if has_lasair_credentials():
+    # Use cached credential check if provided, otherwise check directly
+    if lasair_enabled is not None:
+        should_do_ztf = lasair_enabled
+    else:
+        should_do_ztf = has_lasair_credentials()
+    
+    if should_do_ztf:
         try_forced_photometry(candidate, get_ztf_fp, "ZTF")
     else:
         logger.info(
@@ -137,7 +143,7 @@ def process_json_file(file, check_tns: bool = True) -> tuple[int, IngestionResul
     # ---- Host galaxy association ----
     try_associate_host_galaxy(candidate)
 
-    return 1, IngestionResult.CREATED
+    return 1, IngestionResult.CREATED, candidate.name
 
 
 # Step 1: Get JSON names already in DB
@@ -217,9 +223,11 @@ def process_multiple_json_files(directory_path, cutoff=3, check_tns: bool = True
     logger.info(f"Found {len(json_files)} new files to process.")
     total_candidates_added = 0
 
+    # Check credentials once at the beginning
+    lasair_enabled = has_lasair_credentials()
     logger.info(
         "Enrichment capabilities: "
-        f"LASAIR={'enabled' if has_lasair_credentials() else 'disabled'}, "
+        f"LASAIR={'enabled' if lasair_enabled else 'disabled'}"
     )
 
     summary = Counter()
@@ -227,11 +235,15 @@ def process_multiple_json_files(directory_path, cutoff=3, check_tns: bool = True
     for json_file in json_files:
         try:
             with open(json_file, 'rb') as file:
-                count, result = process_json_file(file)
+                count, result, candidate_name = process_json_file(file, lasair_enabled)
 
                 if result == IngestionResult.CREATED:
                     total_candidates_added += count
-                    logger.info(f"{file.name}: new candidate created")
+                    # Use the candidate's generated name for success messages
+                    if candidate_name:
+                        logger.info(f"{candidate_name}: new candidate created")
+                    else:
+                        logger.info(f"{os.path.basename(json_file)}: new candidate created")
 
                 elif result == IngestionResult.CANDIDATE_EXISTS:
                     logger.info(f"{file.name}: candidate already exists")
