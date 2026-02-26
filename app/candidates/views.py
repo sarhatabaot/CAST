@@ -63,7 +63,7 @@ def upload_file_view(request):
                 messages.error(request, f"Error processing file: {e}")
 
             # Redirect to the candidate list view
-            return redirect('cast_candidates:list')
+            return redirect('candidates:list')
     else:
         form = FileUploadForm()
 
@@ -77,7 +77,7 @@ def delete_candidate_view(request):
     if request.method == 'POST':
         candidate_id = request.POST.get('candidate_id')  # Get candidate ID from the form
         candidate = get_object_or_404(Candidate, id=candidate_id)
-        return_url = request.POST.get('return_url', reverse('cast_candidates:list'))
+        return_url = request.POST.get('return_url', reverse('candidates:list'))
 
         # Delete the candidate
         candidate_name = candidate.name
@@ -89,7 +89,7 @@ def delete_candidate_view(request):
         return redirect(return_url)
 
     # Redirect back to the candidate list
-    return redirect('cast_candidates:list')
+    return redirect('candidates:list')
 
 
 def refresh_atlas_view(request, candidate_id):
@@ -98,7 +98,7 @@ def refresh_atlas_view(request, candidate_id):
     Does not add photometry that already exists.
     """
     candidate = get_object_or_404(Candidate, id=candidate_id)
-    return_url = request.POST.get('return_url', reverse('cast_candidates:list'))
+    return_url = request.POST.get('return_url', reverse('candidates:list'))
     try:
         daysago = request.POST.get('daysago')
         get_atlas_fp(candidate, int(daysago))
@@ -119,7 +119,7 @@ def set_reported_by_last_view(request, candidate_id):
     Set the reported_by_LAST field for a candidate.
     """
     candidate = get_object_or_404(Candidate, id=candidate_id)
-    return_url = request.POST.get('return_url', reverse('cast_candidates:list'))
+    return_url = request.POST.get('return_url', reverse('candidates:list'))
     try:
         set_reported_by_LAST(candidate_id)
         messages.success(request, f"Candidate {candidate.name} has been set as reported by LAST.")
@@ -140,7 +140,7 @@ def refresh_ztf_view(request, candidate_id):
     Does not add photometry that already exists.
     """
     candidate = get_object_or_404(Candidate, id=candidate_id)
-    return_url = request.POST.get('return_url', reverse('cast_candidates:list'))
+    return_url = request.POST.get('return_url', reverse('candidates:list'))
 
     try:
         daysago = request.POST.get('daysago')
@@ -337,7 +337,7 @@ def add_target_view(request):
     """
     if request.method == 'POST':
         candidate_id = request.POST.get('candidate_id')
-        return_url = request.POST.get('return_url', reverse('cast_candidates:list'))
+        return_url = request.POST.get('return_url', reverse('candidates:list'))
 
         try:
             target = add_candidate_as_target(candidate_id)
@@ -352,7 +352,7 @@ def add_target_view(request):
 
         return redirect(return_url)
 
-    return redirect('cast_candidates:list')
+    return redirect('candidates:list')
 
 
 def update_real_bogus_view(request, candidate_id):
@@ -362,7 +362,7 @@ def update_real_bogus_view(request, candidate_id):
     if request.method == 'POST':
         candidate = get_object_or_404(Candidate, id=candidate_id)
         real_bogus = request.POST.get('real_bogus')
-        return_url = request.POST.get('return_url', reverse('cast_candidates:list'))
+        return_url = request.POST.get('return_url', reverse('candidates:list'))
 
         # Map the input to the appropriate value
         if real_bogus == 'real':
@@ -373,7 +373,7 @@ def update_real_bogus_view(request, candidate_id):
             candidate.real_bogus = None
         else:
             messages.error(request, "Invalid real/bogus value selected.")
-            return redirect('cast_candidates:list')
+            return redirect('candidates:list')
         user = request.user
         candidate.real_bogus_user = f"{user.first_name} {user.last_name}"
 
@@ -387,7 +387,7 @@ def update_real_bogus_view(request, candidate_id):
 
         return redirect(return_url)
 
-    return redirect('cast_candidates:list')
+    return redirect('candidates:list')
 
 
 def update_classification_view(request, candidate_id):
@@ -396,7 +396,7 @@ def update_classification_view(request, candidate_id):
     """
     if request.method == 'POST':
         candidate = get_object_or_404(Candidate, id=candidate_id)
-        return_url = request.POST.get('return_url', reverse('cast_candidates:list'))
+        return_url = request.POST.get('return_url', reverse('candidates:list'))
         classification = request.POST.get('classification')
         if classification == 'null':
             candidate.classification = None
@@ -414,7 +414,7 @@ def update_classification_view(request, candidate_id):
 
         return redirect(return_url)
 
-    return redirect('cast_candidates:list')
+    return redirect('candidates:list')
 
 
 @login_required
@@ -435,14 +435,14 @@ def update_followup_view(request, candidate_id):
             msg = f"{candidate.name} unmarked for follow-up."
         else:
             messages.error(request, "Invalid follow-up action.")
-            return redirect('cast_candidates:list')
+            return redirect('candidates:list')
 
         candidate.save()
         messages.success(request, msg)
 
     # Keep the same redirect pattern you use everywhere else
     filter_value = request.GET.get('filter', 'all')
-    redirect_url = f"{reverse('cast_candidates:list')}?filter={filter_value}"
+    redirect_url = f"{reverse('candidates:list')}?filter={filter_value}"
     start_datetime = request.GET.get('start_datetime', '')
     end_datetime = request.GET.get('end_datetime', '')
     page = request.GET.get('page', '')
@@ -471,7 +471,7 @@ def send_tns_report_view(request, candidate_id):
     comment = request.POST.get('comment', '').strip()
     at_type = request.POST.get('at_type', None)
     candidate = get_object_or_404(Candidate, id=candidate_id)
-    return_url = request.POST.get('return_url', reverse('cast_candidates:list'))
+    return_url = request.POST.get('return_url', reverse('candidates:list'))
 
     try:
         user = request.user
@@ -500,7 +500,7 @@ def tns_report_view(request, candidate_id):
     View for displaying TNS report details and manually sending the report.
     """
     candidate = get_object_or_404(Candidate, id=candidate_id)
-    return_url = request.POST.get('return_url', reverse('cast_candidates:list'))
+    return_url = request.POST.get('return_url', reverse('candidates:list'))
     parsed = urlparse(return_url)
     return_url = urlunparse(parsed._replace(fragment=f"candidate-{candidate_id}"))
 
@@ -542,7 +542,7 @@ def update_cutouts_view(request, candidate_id):
         messages.error(request, f"Failed to update cutouts for {candidate.name}: {e}")
 
     # Redirect back to the filtered candidate list
-    return redirect(f"{reverse('cast_candidates:list')}?filter={filter_value}")
+    return redirect(f"{reverse('candidates:list')}?filter={filter_value}")
 
 
 def candidate_detail(request, candidate_id):
@@ -581,7 +581,7 @@ def candidate_detail(request, candidate_id):
 
 def horizons_view(request, candidate_id):
     candidate = get_object_or_404(Candidate, id=candidate_id)
-    return_url = request.POST.get('return_url', reverse('cast_candidates:list'))
+    return_url = request.POST.get('return_url', reverse('candidates:list'))
     parsed = urlparse(return_url)
     return_url = urlunparse(parsed._replace(fragment=f"candidate-{candidate_id}"))
     try:
@@ -602,7 +602,7 @@ def horizons_view(request, candidate_id):
             results = []
     except Exception as e:
         messages.error(request, f"Failed to get data from Horizons: {e}")
-        return redirect('cast_candidates:list')
+        return redirect('candidates:list')
 
     context = {
         'candidate_name': candidate.name,
@@ -617,7 +617,7 @@ def send_astro_colibri_view(request, candidate_id):
     Send candidate data to Astro Colibri.
     """
     candidate = get_object_or_404(Candidate, id=candidate_id)
-    return_url = request.POST.get('return_url', reverse('cast_candidates:list'))
+    return_url = request.POST.get('return_url', reverse('candidates:list'))
     parsed = urlparse(return_url)
     return_url = urlunparse(parsed._replace(fragment=f"candidate-{candidate_id}"))
     try:
@@ -640,7 +640,7 @@ def astro_colibri_report(request, candidate_id):
     View for displaying Astro-COLIBRI report details and manually sending the report.
     """
     candidate = get_object_or_404(Candidate, id=candidate_id)
-    return_url = request.POST.get('return_url', reverse('cast_candidates:list'))
+    return_url = request.POST.get('return_url', reverse('candidates:list'))
     parsed = urlparse(return_url)
     return_url = urlunparse(parsed._replace(fragment=f"candidate-{candidate_id}"))
 
