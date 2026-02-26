@@ -16,7 +16,7 @@ from datetime import timedelta, datetime
 from django.utils.timezone import now
 from django.utils.dateparse import parse_datetime
 from django.db.models import Subquery, OuterRef
-from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth.decorators import login_required, permission_required
 from django.conf import settings
 from django.db.models import Q
 
@@ -28,6 +28,7 @@ from .utils import process_json_file, add_candidate_as_target, check_target_exis
 from .models import Candidate,CandidateDataProduct,CandidateAlert
 from .photometry_utils import generate_photometry_graph, get_atlas_fp, get_ztf_fp
 from .astro_colibri import prepare_astro_colibri_data, send_astro_colibri
+from .constants import CAN_VIEW_CANDIDATES
 
 
 def extract_params_from_request(request):
@@ -158,7 +159,7 @@ def refresh_ztf_view(request, candidate_id):
 
 
 @login_required
-@user_passes_test(lambda user: user.groups.filter(name='LAST general').exists())
+@permission_required(CAN_VIEW_CANDIDATES, raise_exception=True)
 def candidate_list_view(request):
     """
     Display a list of candidates with a filter for real/bogus status.
@@ -377,7 +378,7 @@ def update_classification_view(request, candidate_id):
     return redirect('candidates:list')
 
 @login_required
-@user_passes_test(lambda user: user.groups.filter(name='LAST general').exists())
+@permission_required(CAN_VIEW_CANDIDATES, raise_exception=True)
 def update_followup_view(request, candidate_id):
     """
     Mark or unmark a candidate as 'marked_for_followup'.
@@ -421,7 +422,7 @@ def update_followup_view(request, candidate_id):
     return redirect(redirect_url)
 
 @login_required
-@user_passes_test(lambda user: user.groups.filter(name='LAST general').exists())
+@permission_required(CAN_VIEW_CANDIDATES, raise_exception=True)
 def send_tns_report_view(request, candidate_id):
     """
     Generates and sends a TNS report for a candidate.
@@ -451,7 +452,7 @@ def send_tns_report_view(request, candidate_id):
     return redirect(return_url)
 
 @login_required
-@user_passes_test(lambda user: user.groups.filter(name='LAST general').exists())
+@permission_required(CAN_VIEW_CANDIDATES, raise_exception=True)
 def tns_report_view(request, candidate_id):
     """
     View for displaying TNS report details and manually sending the report.

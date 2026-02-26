@@ -1,8 +1,13 @@
-{% extends 'candidates/base_candidates.html' %}
+{% extends 'tom_common/base.html' %}
+{% load static %}
+{% block main_container_class %}
+container-fluid px-3
+{% endblock %}
+
 {% block title %}Candidate List{% endblock %}
 {% block content %}
 
-<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script src="https://cdn.plot.ly/plotly-3.3.0.min.js" charset="utf-8"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <div class="container-fluid mt-16">
     <h1 class="mb-16">Candidate List</h1>

@@ -1,4 +1,4 @@
-{% load bootstrap4 tom_common_extras %}
+{% load bootstrap4 tom_common_extras candidate_permissions %}
 {% comment %}
 The following nav-item list elements (li) are included in the tom_common/base.html navbar-nav (ul).
 For customization instructions, see tom_common/base.html
@@ -7,7 +7,7 @@ For customization instructions, see tom_common/base.html
 <li class="nav-item {% if request.resolver_match.url_name == 'home' %}active{% endif %}">
     <a class="nav-link" href="/">Home <span class="sr-only">(current)</span></a>
 </li>
-{% if request.user.is_superuser %}
+{% if request.user|has_candidates_permission %}
 <li class="nav-item dropdown">
     <a class="nav-link dropdown-toggle {% if request.resolver_match.namespace == 'candidates' %}active{% endif %}" data-toggle="dropdown">Candidates</a>
     <div class="dropdown-menu">

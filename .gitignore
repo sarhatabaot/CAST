@@ -4,7 +4,6 @@ _static/
 env/
 custom_code/
 data/
-static/
 tmp/
 tests.ipynb
 CAST.log
