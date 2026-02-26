@@ -1,6 +1,8 @@
 from django.core.management.base import BaseCommand
-from app.candidates.models import Candidate,CandidateDataProduct
-from app.candidates.utils import fetch_sdss_cutout
+
+from candidates.models import Candidate, CandidateDataProduct
+from candidates.utils import fetch_sdss_cutout
+
 
 class Command(BaseCommand):
     help = 'Update SDSS data for all candidates'
@@ -11,6 +13,7 @@ class Command(BaseCommand):
                 sdss_cutout = fetch_sdss_cutout(candidate.ra, candidate.dec)
             except Exception as e:
                 print (f"Error fetching SDSS cutout for {candidate.name}: {e}")
+
             if sdss_cutout:
                 CandidateDataProduct.objects.create(
                     candidate=candidate,

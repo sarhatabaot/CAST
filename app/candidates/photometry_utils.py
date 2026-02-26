@@ -25,6 +25,7 @@ from .models import CandidatePhotometry
 
 # Logging
 import logging
+from datetime import timezone as dt_timezone
 logger = logging.getLogger(__name__)
 
 
@@ -52,21 +53,18 @@ def photometry_exists(candidate, obs_date, magnitude, magnitude_error, filter_ba
     return query.exists()
 
 
-def add_photometry_from_last_report(candidate,last_report):
-    """
-    Add photometry data from the json last report.
-    :param candidate: Candidate instance
-    :param last_report: last report section from the json file
-    """
+def add_photometry_from_last_report(candidate, last_report):
     detections_jd = np.array(last_report.get('detections_jd', {}))
     detections = last_report.get('detections_mag', {})
     detections_magerr = last_report.get('detections_magerr', {})
     nondetections_jd = last_report.get('nondetections_jd', {})
     nondetections_mag = last_report.get('nondetections_mag', {})
+
     for i, jd in enumerate(detections_jd):
-        obs_date = Time(jd,format='jd').to_datetime()
+        obs_date = Time(jd, format='jd').to_datetime(timezone=dt_timezone.utc)
         magnitude = detections[i]
         magnitude_error = detections_magerr[i]
+
         if not photometry_exists(candidate, obs_date, magnitude, magnitude_error):
             CandidatePhotometry.objects.create(
                 candidate=candidate,
@@ -77,20 +75,19 @@ def add_photometry_from_last_report(candidate,last_report):
                 telescope="LAST",
                 instrument="LAST-CAM"
             )
-        else:
-            print("photometry exists")
 
     for i, jd in enumerate(nondetections_jd):
-        obs_date = Time(jd,format='jd')
+        obs_date = Time(jd, format='jd').to_datetime(timezone=dt_timezone.utc)
         magnitude = nondetections_mag[i]
+
         CandidatePhotometry.objects.create(
             candidate=candidate,
-            obs_date=obs_date.iso,
-            limit = magnitude,
-            filter_band='clear',  # Use a mapping if needed to human-readable filter names
+            obs_date=obs_date,
+            limit=magnitude,
+            filter_band='clear',
             telescope="LAST",
             instrument="LAST-CAM"
-            )
+        )
 
 
 def get_atlas_fp(candidate, days_ago=10):

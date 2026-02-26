@@ -13,3 +13,5 @@ tom.log
 .env
 app/static
 .DS_STORE
+
+app/large_files/*

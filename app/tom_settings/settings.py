@@ -448,3 +448,56 @@ LAST_SKY_FIELDS_PKL_PATH = env.str('LAST_SKY_FIELDS_PKL_PATH', default='last/LAS
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 WHITENOISE_USE_FINDERS = True
 WHITENOISE_AUTOREFRESH = True
+
+
+# CAST Candidates Configuration
+CAST_CANDIDATES = {
+    # Search and Processing Parameters
+    'cone_search_radius_arcsec': env.int('CONE_SEARCH_RADIUS_ARCSEC', default=3),
+    'candidate_check_tns_default': env.bool('CANDIDATE_CHECK_TNS_DEFAULT', default=True),
+
+    # Observatory Configuration
+    'observatory': {
+        'name': env.str('OBSERVATORY_NAME', default='Neot Smadar'),
+        'lat': env.float('OBSERVATORY_LAT', default=30.053169),
+        'lon': env.float('OBSERVATORY_LON', default=35.041526),
+        'alt': env.float('OBSERVATORY_ALT', default=0.405),
+    },
+
+    # Horizons API Configuration
+    'horizons': {
+        'base_url': env.str('HORIZONS_BASE_URL', default='https://ssd-api.jpl.nasa.gov/sb_ident.api'),
+        'fov_ra_hwidth': env.float('HORIZONS_FOV_RA_HWIDTH', default=0.27778),
+        'fov_dec_hwidth': env.float('HORIZONS_FOV_DEC_HWIDTH', default=0.27778),
+        'mag_required': env.bool('HORIZONS_MAG_REQUIRED', default=True),
+        'vmag_lim': env.float('HORIZONS_VMAG_LIM', default=22.0),
+        'req_elem': env.bool('HORIZONS_REQ_ELEM', default=False),
+        'two_pass': env.bool('HORIZONS_TWO_PASS', default=True),
+    },
+
+    # PS1 API Configuration
+    'ps1': {
+        'files_url': env.str('PS1_FILES_URL', default='https://ps1images.stsci.edu/cgi-bin/ps1filenames.py'),
+        'cutout_url': env.str('PS1_CUTOUT_URL', default='https://ps1images.stsci.edu/cgi-bin/fitscut.cgi'),
+        'timeout': env.int('PS1_REQUEST_TIMEOUT', default=30),
+        'image_size': env.int('PS1_IMAGE_SIZE', default=240),
+        'autoscale': env.float('PS1_AUTOSCALE', default=99.750000),
+    },
+
+    # SDSS API Configuration
+    'sdss': {
+        'cutout_url': env.str('SDSS_CUTOUT_URL',
+                              default='https://skyserver.sdss.org/dr16/SkyServerWS/ImgCutout/getjpeg'),
+        'timeout': env.int('SDSS_REQUEST_TIMEOUT', default=30),
+        'width': env.int('SDSS_IMAGE_WIDTH', default=240),
+        'height': env.int('SDSS_IMAGE_HEIGHT', default=240),
+        'scale': env.float('SDSS_IMAGE_SCALE', default=0.2),
+    },
+
+    # Instrument Configuration
+    'instruments': {
+        'last_telescope': env.str('LAST_TELESCOPE_NAME', default='LAST'),
+        'last_instrument': env.str('LAST_INSTRUMENT_NAME', default='LAST-CAM'),
+        'default_magnitude_error': env.float('DEFAULT_MAGNITUDE_ERROR', default=0.0),
+    }
+}

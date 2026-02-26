@@ -6,4 +6,4 @@ class CandidatesConfig(AppConfig):
     name = "candidates"
 
     def ready(self):
-        import candidates.signals  # noqa
+        import candidates.models.signals  # noqa

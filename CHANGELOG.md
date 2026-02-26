@@ -48,3 +48,58 @@ Implemented a custom permission-based authentication system for the Candidates m
 1. Run Django migrations to apply any database changes
 2. Grant the `can_view_candidates` permission to appropriate user groups in Django admin
 3. Test the implementation to ensure proper access control
+
+## 2026-02-26: Template Organization & Enhanced Features
+
+### Overview
+Comprehensive refactoring of the Candidates module including template reorganization, enhanced frontend features, and improved authentication system.
+
+### Changes Made
+
+#### 1. Template Organization
+- **Moved candidate templates** from `app/templates/candidates/` to `app/candidates/templates/candidates/`
+- **Created dedicated candidates app structure** for better organization
+- **Removed redundant base_candidates.html template**
+- **Enhanced base template structure** with responsive layout and Bootstrap grid system
+
+#### 2. Authentication & Security
+- **Enhanced permission system** with custom template filter `has_candidates_permission`
+- **Improved navigation template** to use new permission-based checks
+- **Added CSRF token handling** for htmx requests
+- **Implemented AlpineJS support** for enhanced frontend interactivity
+
+#### 3. New Features
+- **Added django_gravatar** to INSTALLED_APPS for user profile images
+- **Implemented responsive layout** structure with Bootstrap grid system
+- **Enhanced base template** with theme support via `get_theme` template tag
+- **Improved template inheritance** and organization
+
+#### 4. Code Quality & Documentation
+- **Created comprehensive CHANGELOG.md** documenting all changes
+- **Added PERMISSIONS.md** for centralized permission reference
+- **Enhanced template structure** for better maintainability
+- **Improved file organization** throughout the candidates app
+
+#### 5. Technical Improvements
+- **Removed static/ from .gitignore** (now properly organized)
+- **Added theme support** with get_theme template tag
+- **Enhanced base template structure** for better maintainability
+- **Improved template organization** and inheritance
+
+### Benefits
+- **Better Organization**: Templates now properly organized within their respective app
+- **Enhanced Security**: Improved CSRF protection and permission handling
+- **Modern Frontend**: AlpineJS support for interactive UI components
+- **Responsive Design**: Bootstrap grid system for better mobile experience
+- **User Experience**: Gravatar integration for user profile images
+- **Maintainability**: Centralized documentation and improved code structure
+
+### Breaking Changes
+- **Template paths changed**: All candidate templates moved to app-specific directory
+- **Permission system updated**: Now requires explicit permission assignment instead of hardcoded groups
+
+### Implementation Notes
+- All changes maintain backward compatibility where possible
+- New template structure follows Django best practices
+- Enhanced security measures implemented throughout
+- Responsive design improvements for better user experience

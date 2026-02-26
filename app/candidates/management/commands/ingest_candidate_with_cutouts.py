@@ -1,5 +1,7 @@
 from django.core.management.base import BaseCommand
-from app.candidates.utils import process_multiple_json_files
+
+from candidates.ingestion import process_multiple_json_files
+
 
 class Command(BaseCommand):
     help = 'Ingest multiple JSON files as candidates'

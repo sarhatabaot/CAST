@@ -19,6 +19,7 @@ import re
 
 #Get the logger
 import logging
+import clickhouse_connect
 logger = logging.getLogger(__name__)
 
 
@@ -202,21 +203,34 @@ def get_fields_per_date(date_str,mounts=['01', '02', '03', '05', '06', '07', '08
     client.close()
     return summary_df,field_counts
 
+
 def plot_fields(date_str=datetime.now().strftime('%Y-%m-%d'), colormap=True):
-    last_fields_path = os.path.join(settings.MEDIA_ROOT, "LAST")
-    last_fields = pd.read_pickle(last_fields_path+"/LAST_sky_fields.pkl")
+    # Use Django's static file system to find the pickle file
+    from django.contrib.staticfiles import finders
+
+    # Get the configured path from settings or use default
+    pkl_path = getattr(settings, 'LAST_SKY_FIELDS_PKL_PATH', 'static/last/LAST_sky_fields.pkl')
+
+    # Find the static file
+    file_path = finders.find(pkl_path)
+    if not file_path:
+        raise FileNotFoundError(f"LAST sky fields pickle file not found at path: {pkl_path}")
+
+    logger.info(f"Loading LAST sky fields from: {file_path}")
+    last_fields = pd.read_pickle(file_path)
     last_fields['RA_min_rad'] = np.deg2rad(last_fields.RA_min)
     last_fields['RA_max_rad'] = np.deg2rad(last_fields.RA_max)
     last_fields['Dec_min_rad'] = np.deg2rad(last_fields.Dec_min)
     last_fields['Dec_max_rad'] = np.deg2rad(last_fields.Dec_max)
 
-    summary_df,field_counts = get_fields_per_date(date_str)
-    survey_fields = summary_df#[summary_df['target'].isna()]
+    summary_df, field_counts = get_fields_per_date(date_str)
+    survey_fields = summary_df  # [summary_df['target'].isna()]
     last_fields = last_fields[last_fields['ID'].isin(survey_fields['field'])]
     plot_fields_with_ra_0_to_24(last_fields, field_counts)
-    
+
     plt.tight_layout()
-    plot_path = os.path.join(settings.STATIC_ROOT, "LAST", "plots")
-    plt.savefig(plot_path+f"/{date_str}.png", dpi=300)
+    plot_path = os.path.join(settings.MEDIA_ROOT, "LAST", "plots")
+    os.makedirs(plot_path, exist_ok=True)
+    plt.savefig(os.path.join(plot_path, f"{date_str}.png"), dpi=300)
     plt.close()
     return plot_path

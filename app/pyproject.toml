@@ -27,7 +27,7 @@ dependencies = [
     "whitenoise>=6.0.0",
     "tom-alertstreams",
     "whitenoise>=6.0.0",
-    "clickhouse-connect"
+    "clickhouse_connect"
 ]
 
 [dependency-groups]
