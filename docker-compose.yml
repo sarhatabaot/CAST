@@ -1,7 +1,7 @@
 services:
   web:
     build: ./app
-    container_name: cast_web
+    container_name: cast-web
     command: uv run python manage.py runserver 0.0.0.0:8000
     volumes:
       - ./app/:/app/
@@ -22,21 +22,40 @@ services:
         condition: service_completed_successfully
       collect-static:
         condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import sys, urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/', timeout=3); sys.exit(0)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   scheduler:
     image: mcuadros/ofelia:latest
-    container_name: ofelia_scheduler_2
+    container_name: cast-scheduler
     depends_on:
-      - web
+      web:
+        condition: service_healthy
     command: daemon --docker
     volumes:
       # Allows Ofelia to talk to the Docker engine to trigger commands
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - TZ=Asia/Jerusalem
+    healthcheck:
+      test: ["CMD-SHELL", "ps -o comm= 1 | grep -q '^ofelia$'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     labels:
       ofelia.job-exec.ingest.schedule: "0 0 7 * * *"
-      ofelia.job-exec.ingest.container: "cast_web"
+      ofelia.job-exec.ingest.container: "cast-web"
       ofelia.job-exec.ingest.command: "uv run manage.py ingest_candidates --cutoff 1"
 
   redis:
