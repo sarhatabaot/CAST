@@ -1,5 +1,6 @@
 # Built-in imports
 import os
+from pathlib import Path
 
 # Third-party imports
 import numpy as np
@@ -24,8 +25,105 @@ dtype_mapping = {
     "SDSS-DR16Q": "str",
 }
 
+GLADE_COLUMNS = [
+    "GLADE_no",
+    "PGC_no",
+    "GWGC",
+    "HyperLEDA",
+    "2MASS",
+    "wiseX",
+    "SDSS-DR16Q",
+    "object_type_flag",
+    "RA",
+    "Dec",
+    "B",
+    "B_err",
+    "B_flag",
+    "B_Abs",
+    "J",
+    "J_err",
+    "H",
+    "H_err",
+    "K",
+    "K_err",
+    "W1",
+    "W1_err",
+    "W2",
+    "W2_err",
+    "W1_flag",
+    "B_J",
+    "B_J_err",
+    "z_helio",
+    "z_cmb",
+    "z_flag",
+    "v_err",
+    "z_err",
+    "d_L",
+    "d_L_err",
+    "dist_flag",
+    "Mstar",
+    "Mstar_err",
+    "Mstar_flag",
+    "merger_rate",
+    "merger_rate_err",
+]
+
+GLADE_REQUIRED_COLUMNS = [
+    "GWGC",
+    "HyperLEDA",
+    "2MASS",
+    "wiseX",
+    "SDSS-DR16Q",
+    "RA",
+    "Dec",
+    "d_L",
+    "z_helio",
+]
+
 GLADE_CAT_PATH = os.path.join(settings.BASE_DIR, "large_files", "catalogs", "GLADE_for_CAST.csv")
 glade = None  # Global variable to store the GLADE catalog, instead of initializing it every time
+
+
+def _resolve_glade_path() -> Path:
+    configured_path = Path(GLADE_CAT_PATH)
+    if configured_path.exists():
+        return configured_path
+
+    txt_fallback = configured_path.with_suffix(".txt")
+    if txt_fallback.exists():
+        return txt_fallback
+
+    return configured_path
+
+
+def _looks_like_csv(path: Path) -> bool:
+    with path.open("r", encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            return "," in stripped
+    return False
+
+
+def _load_glade_csv(path: Path) -> pd.DataFrame:
+    return pd.read_csv(
+        path,
+        usecols=GLADE_REQUIRED_COLUMNS,
+        dtype=dtype_mapping,
+    )
+
+
+def _load_glade_txt(path: Path) -> pd.DataFrame:
+    return pd.read_csv(
+        path,
+        sep=r"\s+",
+        header=None,
+        names=GLADE_COLUMNS,
+        usecols=GLADE_REQUIRED_COLUMNS,
+        dtype=dtype_mapping,
+        na_values=["null"],
+    )
 
 
 def get_glade():
@@ -35,8 +133,9 @@ def get_glade():
     """
     global glade
     if glade is None:
-        logger.info("Loading GLADE catalog...")
-        glade = pd.read_csv(GLADE_CAT_PATH, dtype=dtype_mapping)
+        glade_path = _resolve_glade_path()
+        logger.info(f"Loading GLADE catalog from {glade_path}...")
+        glade = _load_glade_csv(glade_path) if _looks_like_csv(glade_path) else _load_glade_txt(glade_path)
     return glade
 
 

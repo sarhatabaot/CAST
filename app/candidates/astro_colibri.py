@@ -12,10 +12,10 @@ logger = logging.getLogger(__name__)
 
 colibri_settings = settings.ASTRO_COLIBRI
 api_url = colibri_settings['api_url']
-auth_filename = colibri_settings['auth_file']
-with open(auth_filename, "r") as f:
-    auth_pass = f.read().strip()
-auth = requests.auth.HTTPBasicAuth("last", auth_pass)
+auth = requests.auth.HTTPBasicAuth(
+    colibri_settings['username'],
+    colibri_settings['password'],
+)
 
 
 def send_astro_colibri(data):

@@ -38,7 +38,7 @@ ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[""])
 
 # Application definition
 
-TOM_NAME = 'tom_marshal_demo'
+TOM_NAME = 'CAST'
 
 # Use built-in css theme to change the look of your TOM. (Valid themes = [Dark,])
 # CSS_THEME = 'Dark'
@@ -398,7 +398,8 @@ except ImportError:
 # Astro-COLIBRI settings
 ASTRO_COLIBRI = {
     'api_url': env.str('ASTRO_COLIBRI_API_URL', default='https://astro-colibri.science'),
-    'auth_file': env.str('ASTRO_COLIBRI_AUTH_FILE', default='./astro_colibri_auth.txt'),
+    'username': env.str('ASTRO_COLIBRI_USERNAME', default='last'),
+    'password': env.str('ASTRO_COLIBRI_PASSWORD', default=''),
 }
 
 LAST_DB = env.json('LAST_DB', default={
