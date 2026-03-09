@@ -1,4 +1,20 @@
 services:
+  download-large-files:
+    build: ./app
+    command:
+      - uv
+      - run
+      - python
+      - scripts/download_large_files.py
+      - --manifest
+      - ${LARGE_FILES_MANIFEST_PATH:-/app/large_files_manifest.json}
+    volumes:
+      - ./app/:/app/
+      - ./large_files_manifest.json:/app/large_files_manifest.json:ro
+    env_file:
+      - .env
+    restart: "no"
+
   web:
     build: ./app
     container_name: cast-web

@@ -3,6 +3,9 @@ FROM astral/uv:python3.12-bookworm-slim
 # Set work directory
 WORKDIR /app
 
+# Runtime tools for large-file/bootstrap downloads
+RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf /var/lib/apt/lists/*
+
 # Environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

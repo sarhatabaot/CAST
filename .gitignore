@@ -1,4 +1,5 @@
 db.sqlite3
+__pycache__
 __pycache__/
 _static/
 env/
@@ -15,3 +16,5 @@ app/static
 .DS_STORE
 
 app/large_files/*
+
+large_files_manifest.json
