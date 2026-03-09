@@ -5,7 +5,12 @@
     </a>
 {% else %}
     <!-- Blue "Add Target" button -->
-    <form method="POST" action="{% url 'candidates:add_target' %}" style="display:inline;">
+    <form method="POST"
+          action="{% url 'candidates:add_target' %}"
+          style="display:inline;"
+          hx-post="{% url 'candidates:add_target' %}"
+          hx-target="closest tr"
+          hx-swap="outerHTML">
         {% csrf_token %}
         <input type="hidden" name="candidate_id" value="{{ item.candidate.id }}">
         <input type="hidden" name="return_url" value="{{ request.get_full_path }}">
@@ -17,7 +22,10 @@
     <!-- Unmark follow-up -->
     <form method="POST"
           action="{% url 'candidates:update_followup' item.candidate.id %}?filter={{ filter_value }}&start_datetime={{ start_datetime }}&end_datetime={{ end_datetime }}&page={{ page_obj.number }}&items_per_page={{ items_per_page }}"
-          style="display:inline;">
+          style="display:inline;"
+          hx-post="{% url 'candidates:update_followup' item.candidate.id %}?filter={{ filter_value }}&start_datetime={{ start_datetime }}&end_datetime={{ end_datetime }}&page={{ page_obj.number }}&items_per_page={{ items_per_page }}"
+          hx-target="closest tr"
+          hx-swap="outerHTML">
         {% csrf_token %}
         <input type="hidden" name="followup" value="unmark">
         <button type="submit"
@@ -30,7 +38,10 @@
     <!-- Mark for follow-up -->
     <form method="POST"
           action="{% url 'candidates:update_followup' item.candidate.id %}?filter={{ filter_value }}&start_datetime={{ start_datetime }}&end_datetime={{ end_datetime }}&page={{ page_obj.number }}&items_per_page={{ items_per_page }}"
-          style="display:inline;">
+          style="display:inline;"
+          hx-post="{% url 'candidates:update_followup' item.candidate.id %}?filter={{ filter_value }}&start_datetime={{ start_datetime }}&end_datetime={{ end_datetime }}&page={{ page_obj.number }}&items_per_page={{ items_per_page }}"
+          hx-target="closest tr"
+          hx-swap="outerHTML">
         {% csrf_token %}
         <input type="hidden" name="followup" value="mark">
         <button type="submit"
@@ -135,7 +146,10 @@
 <form method="POST"
       action="{% url 'candidates:refresh_atlas' item.candidate.id %}"
       style="display: inline-flex; align-items: center; vertical-align: middle;"
-      class="refresh-form">
+      class="refresh-form"
+      hx-post="{% url 'candidates:refresh_atlas' item.candidate.id %}"
+      hx-target="closest tr"
+      hx-swap="outerHTML">
     {% csrf_token %}
     <div style="display: inline-flex; align-items: center; background-color: #2aa198; border: 1px solid #2aa198; border-radius: 4px; overflow: hidden;">
         <input type="number"
@@ -157,7 +171,10 @@
 <form method="POST"
       action="{% url 'candidates:refresh_ztf' item.candidate.id %}"
       style="display: inline-flex; align-items: center; vertical-align: middle;"
-      class="refresh-form">
+      class="refresh-form"
+      hx-post="{% url 'candidates:refresh_ztf' item.candidate.id %}"
+      hx-target="closest tr"
+      hx-swap="outerHTML">
     {% csrf_token %}
     <div style="display: inline-flex; align-items: center; background-color: #e88b8b; border: 1px solid #e88b8b; border-radius: 4px; overflow: hidden;">
         <input type="number"
@@ -184,7 +201,10 @@
     {% if not item.candidate.reported_by_LAST %}
         <form method="POST"
               action="{% url 'candidates:set_reported_by_LAST' item.candidate.id %}"
-              style="display:inline;">
+              style="display:inline;"
+              hx-post="{% url 'candidates:set_reported_by_LAST' item.candidate.id %}"
+              hx-target="closest tr"
+              hx-swap="outerHTML">
             {% csrf_token %}
             <input type="hidden" name="candidate_id" value="{{ item.candidate.id }}">
             <button type="submit" class="btn btn-sm btn-secondary text-white">
@@ -195,7 +215,10 @@
 
     <form method="POST"
           action="{% url 'candidates:delete_candidate' %}"
-          style="display:inline;">
+          style="display:inline;"
+          hx-post="{% url 'candidates:delete_candidate' %}"
+          hx-target="closest tr"
+          hx-swap="outerHTML">
         {% csrf_token %}
         <input type="hidden" name="candidate_id" value="{{ item.candidate.id }}">
         <button type="submit" class="btn btn-sm btn-danger">

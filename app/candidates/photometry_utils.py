@@ -421,7 +421,7 @@ def generate_photometry_graph(candidate):
     )
 
     # Convert the graph to HTML for embedding in the template
-    graph_html = fig.to_html(full_html=False, include_plotlyjs='cdn')
+    graph_html = fig.to_html(full_html=False, include_plotlyjs=False)
 
     return mark_safe(graph_html)
 

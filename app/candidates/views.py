@@ -1,6 +1,7 @@
 import logging
 from collections import defaultdict
 from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
+from types import SimpleNamespace
 
 import astropy.units as u
 
@@ -11,9 +12,12 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.db.models import Subquery, OuterRef
+from django.http import HttpResponse
 from django.shortcuts import render, redirect, get_object_or_404
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.safestring import mark_safe
+from tom_targets.models import Target
 
 from .astro_colibri import prepare_astro_colibri_data, send_astro_colibri
 from .forms import FileUploadForm
@@ -86,6 +90,11 @@ def delete_candidate_view(request):
         # Add a success message
         messages.success(request, f"Candidate '{candidate_name}' has been deleted.")
 
+        if request.htmx:
+            response = HttpResponse("")
+            response["HX-Trigger"] = "refreshMessages"
+            return response
+
         return redirect(return_url)
 
     # Redirect back to the candidate list
@@ -108,6 +117,8 @@ def refresh_atlas_view(request, candidate_id):
 
     # Add anchor for the specific candidate
     if candidate_id:
+        if request.htmx:
+            return render_candidate_row_response(request, candidate)
         parsed = urlparse(return_url)
         return_url = urlunparse(parsed._replace(fragment=f"candidate-{candidate_id}"))
 
@@ -128,6 +139,9 @@ def set_reported_by_last_view(request, candidate_id):
 
     # Add anchor for the specific candidate
     if candidate_id:
+        candidate.refresh_from_db()
+        if request.htmx:
+            return render_candidate_row_response(request, candidate)
         parsed = urlparse(return_url)
         return_url = urlunparse(parsed._replace(fragment=f"candidate-{candidate_id}"))
 
@@ -151,6 +165,8 @@ def refresh_ztf_view(request, candidate_id):
 
     # Add anchor for the specific candidate
     if candidate_id:
+        if request.htmx:
+            return render_candidate_row_response(request, candidate)
         parsed = urlparse(return_url)
         return_url = urlunparse(parsed._replace(fragment=f"candidate-{candidate_id}"))
 
@@ -225,6 +241,106 @@ def get_datetime_range(params):
 CUTOUT_TYPES = ['ps1', 'ref', 'new', 'diff', 'sdss']
 
 
+def build_cutout_map(candidate_ids):
+    latest_cutouts = {}
+    cutouts = CandidateDataProduct.objects.filter(
+        candidate_id__in=candidate_ids,
+        data_product_type__in=CUTOUT_TYPES,
+    ).order_by("candidate_id", "data_product_type", "-created_at")
+
+    for cutout in cutouts:
+        key = (cutout.candidate_id, cutout.data_product_type)
+        if key not in latest_cutouts:
+            latest_cutouts[key] = cutout
+
+    return {
+        candidate_id: [latest_cutouts.get((candidate_id, cutout_type)) for cutout_type in CUTOUT_TYPES]
+        for candidate_id in candidate_ids
+    }
+
+
+def build_target_map(candidates, radius_arcsec=3):
+    if not candidates:
+        return {}
+
+    radius_deg = radius_arcsec / 3600.0
+    ras = [candidate.ra for candidate in candidates]
+    decs = [candidate.dec for candidate in candidates]
+
+    nearby_targets = list(
+        Target.objects.filter(
+            ra__gte=min(ras) - radius_deg,
+            ra__lte=max(ras) + radius_deg,
+            dec__gte=min(decs) - radius_deg,
+            dec__lte=max(decs) + radius_deg,
+        )
+    )
+
+    if not nearby_targets:
+        return {candidate.id: None for candidate in candidates}
+
+    target_coords = SkyCoord(
+        ra=[target.ra for target in nearby_targets] * u.deg,
+        dec=[target.dec for target in nearby_targets] * u.deg,
+    )
+
+    target_map = {}
+    max_sep = radius_arcsec * u.arcsec
+
+    for candidate in candidates:
+        candidate_coord = SkyCoord(ra=candidate.ra * u.deg, dec=candidate.dec * u.deg)
+        separations = candidate_coord.separation(target_coords)
+
+        matched_target = None
+        for index, separation in enumerate(separations):
+            if separation <= max_sep:
+                matched_target = nearby_targets[index]
+                break
+
+        target_map[candidate.id] = matched_target
+
+    return target_map
+
+
+def build_candidate_status_item(candidate):
+    return {
+        "candidate": candidate,
+        "target": check_target_exists_for_candidate(candidate.id),
+        "graph": generate_photometry_graph(candidate),
+        "cutouts": [
+            CandidateDataProduct.objects
+            .filter(candidate=candidate, data_product_type=cutout_type)
+            .order_by("-created_at")
+            .first()
+            for cutout_type in CUTOUT_TYPES
+        ],
+        "last_alert": CandidateAlert.objects
+        .filter(candidate=candidate)
+        .order_by("-created_at")
+        .first(),
+        "classification_choices": CLASSIFICATION_CHOICES,
+    }
+
+
+def render_candidate_row_response(request, candidate):
+    request_params = extract_params_from_request(request)
+    page_number = parse_int(request.GET.get("page")) or 1
+    context = {
+        **request_params,
+        "item": build_candidate_status_item(candidate),
+        "page_obj": SimpleNamespace(number=page_number),
+        "tns_test": settings.TNS_TEST,
+    }
+    row_html = render_to_string("candidates/partials/_candidate_row.html", context, request=request)
+    response = HttpResponse(row_html)
+    response["HX-Trigger"] = "refreshMessages"
+    return response
+
+
+def messages_fragment(request):
+    return render(request, "tom_common/partials/messages.html")
+
+
 @login_required
 def candidate_list_view(request):
     """
@@ -259,15 +375,19 @@ def candidate_list_view(request):
         candidates = candidates.filter(discovery_datetime__gte=discovery_date)
 
     # Annotate candidates with the latest alert timestamp
-    latest_alert_subquery = Subquery(
+    latest_alert_values = (
         CandidateAlert.objects
         .filter(candidate=OuterRef("pk"))
         .order_by("-created_at")
-        .values("created_at")[:1]
     )
 
     candidates = candidates.annotate(
-        latest_alert_time=latest_alert_subquery
+        latest_alert_time=Subquery(latest_alert_values.values("created_at")[:1]),
+        latest_alert_score=Subquery(latest_alert_values.values("score")[:1]),
+        latest_alert_mount=Subquery(latest_alert_values.values("mount")[:1]),
+        latest_alert_camera=Subquery(latest_alert_values.values("camera")[:1]),
+        latest_alert_fieldid=Subquery(latest_alert_values.values("fieldid")[:1]),
+        latest_alert_subimage=Subquery(latest_alert_values.values("subimage")[:1]),
     )
     candidates = candidates.exclude(latest_alert_time__isnull=True)
 
@@ -289,26 +409,26 @@ def candidate_list_view(request):
 
     page_candidates = list(page_obj.object_list)
     candidate_ids = [c.id for c in page_candidates]
+    cutout_map = build_cutout_map(candidate_ids)
+    target_map = build_target_map(page_candidates)
 
     candidate_status = [
         {
             "candidate": candidate,
-            "target": check_target_exists_for_candidate(candidate.id),
+            "target": target_map.get(candidate.id),
             "graph": generate_photometry_graph(candidate),
-            "cutouts": [
-                CandidateDataProduct.objects
-                .filter(candidate=candidate, data_product_type=cutout_type)
-                .order_by("-created_at")
-                .first()
-                for cutout_type in CUTOUT_TYPES
-            ],
-            "last_alert": CandidateAlert.objects
-            .filter(candidate=candidate)
-            .order_by("-created_at")
-            .first(),
+            "cutouts": cutout_map.get(candidate.id, []),
+            "last_alert": {
+                "score": candidate.latest_alert_score,
+                "mount": candidate.latest_alert_mount,
+                "camera": candidate.latest_alert_camera,
+                "fieldid": candidate.latest_alert_fieldid,
+                "subimage": candidate.latest_alert_subimage,
+                "created_at": candidate.latest_alert_time,
+            },
             "classification_choices": CLASSIFICATION_CHOICES,
         }
-        for candidate in page_obj.object_list
+        for candidate in page_candidates
     ]
 
     # Construct query string without 'page' parameter for pagination links
@@ -347,6 +467,9 @@ def add_target_view(request):
 
         # Append anchor to scroll back to the candidate
         if candidate_id:
+            if request.htmx:
+                candidate = get_object_or_404(Candidate, id=candidate_id)
+                return render_candidate_row_response(request, candidate)
             parsed = urlparse(return_url)
             return_url = urlunparse(parsed._replace(fragment=f"candidate-{candidate_id}"))
 
@@ -375,13 +498,16 @@ def update_real_bogus_view(request, candidate_id):
             messages.error(request, "Invalid real/bogus value selected.")
             return redirect('candidates:list')
         user = request.user
-        candidate.real_bogus_user = f"{user.first_name} {user.last_name}"
+        full_name = f"{user.first_name} {user.last_name}".strip()
+        candidate.real_bogus_user = full_name or user.username
 
         candidate.save()
         messages.success(request, f"Updated {candidate.name} to {candidate.get_real_bogus_display()}.")
 
         # Append anchor to scroll back to the candidate
         if candidate_id:
+            if request.htmx:
+                return render_candidate_row_response(request, candidate)
             parsed = urlparse(return_url)
             return_url = urlunparse(parsed._replace(fragment=f"candidate-{candidate_id}"))
 
@@ -409,6 +535,8 @@ def update_classification_view(request, candidate_id):
 
         # Append anchor to scroll back to the candidate
         if candidate_id:
+            if request.htmx:
+                return render_candidate_row_response(request, candidate)
             parsed = urlparse(return_url)
             return_url = urlunparse(parsed._replace(fragment=f"candidate-{candidate_id}"))
 
@@ -439,6 +567,9 @@ def update_followup_view(request, candidate_id):
 
         candidate.save()
         messages.success(request, msg)
+
+        if request.htmx:
+            return render_candidate_row_response(request, candidate)
 
     # Keep the same redirect pattern you use everywhere else
     filter_value = request.GET.get('filter', 'all')
@@ -629,6 +760,8 @@ def send_astro_colibri_view(request, candidate_id):
         candidate.reported_to_astro_colibri = True
         candidate.save()
         messages.success(request, f"Candidate {candidate.name} sent to Astro Colibri.")
+        if request.htmx:
+            return render_candidate_row_response(request, candidate)
     except Exception as e:
         messages.error(request, f"Failed to send candidate to Astro-COLIBRI: {e}")
 

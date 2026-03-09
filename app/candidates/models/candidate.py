@@ -113,9 +113,9 @@ class Candidate(models.Model):
         """
         Return a human-readable string for the real/bogus classification.
         """
-        if self.real_bogus:
+        if self.real_bogus is True:
             return "Real"
-        elif not self.real_bogus:
+        if self.real_bogus is False:
             return "Bogus"
         return "Neither"
 

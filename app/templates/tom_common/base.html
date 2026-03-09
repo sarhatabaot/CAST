@@ -49,7 +49,7 @@
       <div class="row no-gutters">
         <main role="main" class="col px-0">
           <div class="{% block main_container_class %}container{% endblock %}">
-            {% bootstrap_messages %}
+            {% include 'tom_common/partials/messages.html' %}
             <div class="content">
               {% block content %}
               {% endblock %}
@@ -68,6 +68,12 @@
   <script>
     document.body.addEventListener('htmx:configRequest', function (event) {
         event.detail.headers['X-CSRFToken'] = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    });
+    document.body.addEventListener('refreshMessages', function () {
+        htmx.ajax('GET', "{% url 'candidates:messages_fragment' %}", {
+            target: '#messages',
+            swap: 'outerHTML'
+        });
     });
     </script>
   </body>

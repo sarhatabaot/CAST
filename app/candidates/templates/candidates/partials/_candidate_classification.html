@@ -4,7 +4,11 @@
 
 <div style="margin-top: 10px; display: flex; flex-direction: column; gap;">
     <div style="display: flex; flex-direction: row; gap: 5px;">
-        <form method="POST" action="{% url 'candidates:update_real_bogus' item.candidate.id %}">
+        <form method="POST"
+              action="{% url 'candidates:update_real_bogus' item.candidate.id %}"
+              hx-post="{% url 'candidates:update_real_bogus' item.candidate.id %}"
+              hx-target="closest tr"
+              hx-swap="outerHTML">
             {% csrf_token %}
             <input type="hidden" name="real_bogus" value="real">
             <input type="hidden" name="return_url" value="{{ request.get_full_path }}">
@@ -14,7 +18,11 @@
             </button>
         </form>
 
-        <form method="POST" action="{% url 'candidates:update_real_bogus' item.candidate.id %}">
+        <form method="POST"
+              action="{% url 'candidates:update_real_bogus' item.candidate.id %}"
+              hx-post="{% url 'candidates:update_real_bogus' item.candidate.id %}"
+              hx-target="closest tr"
+              hx-swap="outerHTML">
             {% csrf_token %}
             <input type="hidden" name="real_bogus" value="bogus">
             <input type="hidden" name="return_url" value="{{ request.get_full_path }}">
@@ -24,7 +32,11 @@
             </button>
         </form>
 
-        <form method="POST" action="{% url 'candidates:update_real_bogus' item.candidate.id %}">
+        <form method="POST"
+              action="{% url 'candidates:update_real_bogus' item.candidate.id %}"
+              hx-post="{% url 'candidates:update_real_bogus' item.candidate.id %}"
+              hx-target="closest tr"
+              hx-swap="outerHTML">
             {% csrf_token %}
             <input type="hidden" name="real_bogus" value="null">
             <input type="hidden" name="return_url" value="{{ request.get_full_path }}">
@@ -43,8 +55,12 @@
     </div>
 
     <div style="display: flex; gap: 5px;">
-        {% for value,label in classification_choices %}
-        <form method="POST" action="{% url 'candidates:update_classification' item.candidate.id %}">
+        {% for value,label in item.classification_choices %}
+        <form method="POST"
+              action="{% url 'candidates:update_classification' item.candidate.id %}"
+              hx-post="{% url 'candidates:update_classification' item.candidate.id %}"
+              hx-target="closest tr"
+              hx-swap="outerHTML">
             {% csrf_token %}
             <input type="hidden" name="classification" value="{{ value }}">
             <input type="hidden" name="return_url" value="{{ request.get_full_path }}">
@@ -57,7 +73,11 @@
     </div>
 
     <div style="margin-top: 5px; text-align: center;">
-        <form method="POST" action="{% url 'candidates:update_classification' item.candidate.id %}">
+        <form method="POST"
+              action="{% url 'candidates:update_classification' item.candidate.id %}"
+              hx-post="{% url 'candidates:update_classification' item.candidate.id %}"
+              hx-target="closest tr"
+              hx-swap="outerHTML">
             {% csrf_token %}
             <input type="hidden" name="classification" value="null">
             <input type="hidden" name="return_url" value="{{ request.get_full_path }}">

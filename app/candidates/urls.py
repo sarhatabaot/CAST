@@ -5,6 +5,7 @@ app_name = 'candidates'  # Namespacing for the app
 
 urlpatterns = [
     # path('add/', views.add_candidate_view, name='add'),  # Add a single candidate
+    path('messages/', views.messages_fragment, name='messages_fragment'),
     path('list/', views.candidate_list_view, name='list'),  # List all candidates
     path('<int:candidate_id>/', views.candidate_detail, name='candidate_detail'),
     path('upload/', views.upload_file_view, name='upload'),  # Upload candidates via a file
