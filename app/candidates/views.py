@@ -22,6 +22,7 @@ from django.contrib.sites.shortcuts import get_current_site
 from django_comments.models import Comment
 from tom_targets.models import Target
 
+from cast.external_api_status import get_external_api_service_status, is_external_api_service_enabled
 from .astro_colibri import prepare_astro_colibri_data, send_astro_colibri
 from .forms import FileUploadForm
 from .ingestion import process_json_file
@@ -328,11 +329,17 @@ def build_candidate_status_item(candidate):
 def render_candidate_row_response(request, candidate):
     request_params = extract_params_from_request(request)
     page_number = parse_int(request.GET.get("page")) or 1
+    tns_status = get_external_api_service_status("TNS")
+    astro_colibri_status = get_external_api_service_status("Astro-COLIBRI")
     context = {
         **request_params,
         "item": build_candidate_status_item(candidate),
         "page_obj": SimpleNamespace(number=page_number),
         "tns_test": settings.TNS_TEST,
+        "tns_status": tns_status,
+        "astro_colibri_status": astro_colibri_status,
+        "tns_enabled": is_external_api_service_enabled("TNS"),
+        "astro_colibri_enabled": is_external_api_service_enabled("Astro-COLIBRI"),
     }
     row_html = render_to_string("candidates/partials/_candidate_row.html", context, request=request)
     response = HttpResponse(row_html)
@@ -442,6 +449,10 @@ def candidate_list_view(request):
 
     context = {
         **request_params,
+        "tns_status": get_external_api_service_status("TNS"),
+        "astro_colibri_status": get_external_api_service_status("Astro-COLIBRI"),
+        "tns_enabled": is_external_api_service_enabled("TNS"),
+        "astro_colibri_enabled": is_external_api_service_enabled("Astro-COLIBRI"),
 
         'start_datetime': start_datetime,  # override in case not supplied, and then changed to "now"
         'candidate_status': candidate_status,

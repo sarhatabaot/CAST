@@ -2,9 +2,10 @@ from importlib import import_module
 
 import pandas as pd
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.sites.models import Site
-from django.test import TestCase
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from django_comments.models import Comment
@@ -14,6 +15,9 @@ from unittest.mock import patch
 from candidates.gal_association import associate_galaxy
 from candidates.models import Candidate
 from candidates.utils import add_candidate_as_target
+from candidates.views import render_candidate_row_response
+from cast.external_api_status import EXTERNAL_API_STATUS_CACHE_KEY, write_external_api_status_snapshot
+from django.core.cache import cache
 
 
 class GladeAssociationTests(TestCase):
@@ -116,6 +120,77 @@ class CandidateTargetAutomationTests(TestCase):
         candidate.refresh_from_db()
         self.assertFalse(candidate.real_bogus)
         self.assertEqual(Target.objects.count(), 0)
+
+
+class CandidateActionConfigurationTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.candidate = Candidate.objects.create(
+            ra=12.0,
+            dec=34.0,
+            discovery_datetime=timezone.now(),
+        )
+        cache.delete(EXTERNAL_API_STATUS_CACHE_KEY)
+
+    def _render_row(self):
+        request = self.factory.get("/candidates/")
+        request.user = AnonymousUser()
+        with patch("candidates.views.build_candidate_status_item") as mock_build_item:
+            mock_build_item.return_value = {
+                "candidate": self.candidate,
+                "target": None,
+                "graph": None,
+                "cutouts": [],
+                "last_alert": None,
+                "classification_choices": [],
+            }
+            response = render_candidate_row_response(request, self.candidate)
+        return response.content.decode("utf-8")
+
+    def test_row_uses_cached_external_api_status_to_disable_actions(self):
+        write_external_api_status_snapshot(
+            {
+                "refreshed_at": "2026-03-12T00:00:00+00:00",
+                "services": [
+                    {
+                        "name": "TNS",
+                        "configured": True,
+                        "auth_ok": False,
+                        "status_label": "auth_failed",
+                        "message": "TNS credentials were rejected.",
+                        "checked_at": "2026-03-12T00:00:00+00:00",
+                        "metadata": {"environment": "sandbox"},
+                    },
+                    {
+                        "name": "Astro-COLIBRI",
+                        "configured": False,
+                        "auth_ok": None,
+                        "status_label": "not_configured",
+                        "message": "Service is not configured.",
+                        "checked_at": "2026-03-12T00:00:00+00:00",
+                        "metadata": {"check_mode": "best_effort"},
+                    },
+                ],
+            }
+        )
+
+        content = self._render_row()
+
+        self.assertIn('title="TNS credentials were rejected."', content)
+        self.assertIn('title="Service is not configured."', content)
+        self.assertNotIn(reverse("candidates:tns_report_details", args=[self.candidate.id]), content)
+        self.assertNotIn(reverse("candidates:astro_colibri_report", args=[self.candidate.id]), content)
+
+    @override_settings(
+        BROKERS={"TNS": {"api_key": "key", "bot_id": "1", "bot_name": "bot"}},
+        ASTRO_COLIBRI={"api_url": "https://astro-colibri.science", "username": "last", "password": "secret"},
+    )
+    def test_row_falls_back_to_configuration_when_no_cached_status_exists(self):
+        content = self._render_row()
+
+        self.assertIn(reverse("candidates:tns_report_details", args=[self.candidate.id]), content)
+        self.assertIn(reverse("candidates:astro_colibri_report", args=[self.candidate.id]), content)
+        self.assertNotIn('title="Service is not configured."', content)
 
 
 class CandidateCommentThreadTests(TestCase):

@@ -21,6 +21,21 @@ _startup_lock = threading.Lock()
 _startup_started = False
 
 
+def _tns_configured():
+    tns_settings = settings.BROKERS.get("TNS", {})
+    return all(tns_settings.get(key) for key in ("api_key", "bot_id", "bot_name"))
+
+
+def _atlas_configured():
+    atlas_settings = settings.BROKERS.get("ATLAS", {})
+    return bool(atlas_settings.get("user_name") and atlas_settings.get("password"))
+
+
+def _astro_colibri_configured():
+    colibri_settings = settings.ASTRO_COLIBRI
+    return all(colibri_settings.get(key) for key in ("api_url", "username", "password"))
+
+
 def _utcnow_iso():
     return datetime.now(timezone.utc).isoformat()
 
@@ -56,10 +71,7 @@ def _mark_failure(status, label, message, metadata=None):
 
 
 def check_tns_status():
-    tns_settings = settings.BROKERS.get("TNS", {})
-    configured = all(
-        tns_settings.get(key) for key in ("api_key", "bot_id", "bot_name")
-    )
+    configured = _tns_configured()
     environment = "sandbox" if settings.TNS_TEST else "production"
     status = _base_status("TNS", configured, metadata={"environment": environment})
     if not configured:
@@ -122,7 +134,7 @@ def check_lasair_status():
 
 def check_atlas_status():
     atlas_settings = settings.BROKERS.get("ATLAS", {})
-    configured = bool(atlas_settings.get("user_name") and atlas_settings.get("password"))
+    configured = _atlas_configured()
     status = _base_status("ATLAS", configured)
     if not configured:
         return status
@@ -149,7 +161,7 @@ def check_atlas_status():
 
 def check_astro_colibri_status():
     colibri_settings = settings.ASTRO_COLIBRI
-    configured = all(colibri_settings.get(key) for key in ("api_url", "username", "password"))
+    configured = _astro_colibri_configured()
     status = _base_status("Astro-COLIBRI", configured, metadata={"check_mode": "best_effort"})
     if not configured:
         return status
@@ -209,6 +221,39 @@ def refresh_external_api_status():
 
 def get_external_api_status_snapshot():
     return cache.get(EXTERNAL_API_STATUS_CACHE_KEY)
+
+
+def get_external_api_service_status(service_name):
+    snapshot = get_external_api_status_snapshot() or {}
+    for service in snapshot.get("services", []):
+        if service.get("name") == service_name:
+            return service
+
+    fallback_builders = {
+        "TNS": lambda: _base_status(
+            "TNS",
+            _tns_configured(),
+            metadata={"environment": "sandbox" if settings.TNS_TEST else "production"},
+        ),
+        "LASAIR": lambda: _base_status("LASAIR", bool(get_lasair_api_token())),
+        "ATLAS": lambda: _base_status("ATLAS", _atlas_configured()),
+        "Astro-COLIBRI": lambda: _base_status(
+            "Astro-COLIBRI",
+            _astro_colibri_configured(),
+            metadata={"check_mode": "best_effort"},
+        ),
+    }
+    builder = fallback_builders.get(service_name)
+    return builder() if builder else None
+
+
+def is_external_api_service_enabled(service_name):
+    service = get_external_api_service_status(service_name)
+    if not service:
+        return False
+    if not service.get("configured"):
+        return False
+    return service.get("auth_ok") is not False
 
 
 def _run_startup_refresh():
