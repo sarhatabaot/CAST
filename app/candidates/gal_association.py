@@ -77,6 +77,7 @@ GLADE_REQUIRED_COLUMNS = [
     "RA",
     "Dec",
     "d_L",
+    "dist_flag",
     "z_helio",
 ]
 
@@ -158,6 +159,10 @@ def associate_galaxy(ra, dec, radius=30.0):
         np.logical_and(glade['RA'] > ra - 0.5, glade['RA'] < ra + 0.5),
         np.logical_and(glade['Dec'] > dec - 0.5, glade['Dec'] < dec + 0.5)
     )]
+    if mini_glade.empty:
+        logger.error(f"No galaxy found within {radius} arcseconds for candidate at RA: {ra}, Dec: {dec}.")
+        return None, None, None
+
     glade_coo = SkyCoord(mini_glade['RA'], mini_glade['Dec'], frame='icrs', unit='deg')
 
     target_coord = SkyCoord(ra=ra * u.deg, dec=dec * u.deg, frame='icrs')
@@ -169,9 +174,10 @@ def associate_galaxy(ra, dec, radius=30.0):
             (f"{gal[col]} ({col})" for col in ["GWGC", "HyperLEDA", "2MASS", "wiseX", "SDSS-DR16Q"] if
              not pd.isna(gal[col])),
             None)  # Get the first non-null galaxy name by priority of catalogs
+        redshift = gal.z_helio if gal.dist_flag in {2, 3} else None
         logger.info(
             f"Found galaxy: {gal_name} with separation {sep2d.arcsecond[0]:.2f} arcseconds and distance {gal.d_L:.2f} Mpc.")
-        return gal_name, gal.d_L, gal.z_helio
+        return gal_name, gal.d_L, redshift
     else:
         logger.error(f"No galaxy found within {radius} arcseconds for candidate at RA: {ra}, Dec: {dec}.")
         return None, None, None
