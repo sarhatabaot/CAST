@@ -2,7 +2,6 @@ from django.shortcuts import render
 from django.http import Http404
 from django.conf import settings
 from datetime import datetime,timedelta
-import os
 from .utils import plot_fields,get_sunset_sunrise
 
 def observed_fields_plot_view(request, night=None):
@@ -21,8 +20,6 @@ def observed_fields_plot_view(request, night=None):
 
     # Prepare file paths
     filename = f"{night}.png"
-    # plot_rel_path = os.path.join("LAST", "plots", filename)
-    # plot_abs_path = os.path.join(settings.STATIC_ROOT, plot_rel_path)
 
     # Generate plot if not already saved
     try:
@@ -32,7 +29,7 @@ def observed_fields_plot_view(request, night=None):
 
     night_date = datetime.strptime(night, '%Y-%m-%d').date()
     context = {
-        'plot_path': f"{settings.STATIC_ROOT}/LAST/plots/{filename}",
+        'plot_url': f"{settings.MEDIA_URL}LAST/plots/{filename}",
         'night': night,
         'prev_night': (night_date - timedelta(days=1)).isoformat(),
         'next_night': (night_date + timedelta(days=1)).isoformat(),

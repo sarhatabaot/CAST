@@ -1,6 +1,4 @@
 {% extends 'tom_common/base.html' %}
-{% load static %}
-
 {% block title %}Observed Fields – {{ night }}{% endblock %}
 
 {% block content %}
@@ -21,7 +19,7 @@
 
     <!-- Plot image -->
     <div class="text-center">
-        <img src="{% static 'LAST/plots/'|add:night|add:'.png' %}" alt="Sky Plot for {{ night }}" class="img-fluid rounded shadow-sm">
+        <img src="{{ plot_url }}" alt="Sky Plot for {{ night }}" class="img-fluid rounded shadow-sm">
     </div>
 
     <!-- Navigation Arrows -->
