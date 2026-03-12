@@ -10,7 +10,7 @@ from django.conf import settings
 from django.utils.dateparse import parse_datetime
 
 from candidates.models import CandidatePhotometry, CandidateDataProduct
-from candidates.photometry_utils import add_photometry_from_last_report, get_atlas_fp, get_ztf_fp
+from candidates.photometry_utils import add_photometry_from_last_report, get_atlas_fp, get_ztf_fp, get_lasair_api_token
 from candidates.services.enrichment import add_ToO_names_to_candidate, update_candidate_cutouts, try_add_cutout, \
     try_forced_photometry, try_associate_host_galaxy
 from candidates.services.identity import handle_candidate_identity
@@ -272,7 +272,4 @@ def process_multiple_json_files(directory_path, cutoff=3, check_tns: bool = True
 
 
 def has_lasair_credentials() -> bool:
-    return bool(
-        settings.LASAIR_API_KEY
-    )
-
+    return bool(get_lasair_api_token())

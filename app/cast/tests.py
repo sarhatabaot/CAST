@@ -2,12 +2,24 @@ import json
 from io import BytesIO
 from unittest.mock import MagicMock, call, mock_open, patch
 
+import requests
+from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase, override_settings
+from django.urls import reverse
 from django.utils import timezone
 
 from candidates.ingestion import IngestionResult, has_lasair_credentials, process_json_file, process_multiple_json_files
 from candidates.models import Candidate
-from candidates.photometry_utils import get_ztf_fp
+from candidates.photometry_utils import get_lasair_api_token, get_ztf_fp
+from cast.external_api_status import (
+    EXTERNAL_API_STATUS_CACHE_KEY,
+    check_atlas_status,
+    check_lasair_status,
+    check_tns_status,
+    get_external_api_status_snapshot,
+    refresh_external_api_status,
+)
 
 
 class IngestionRegressionTests(TestCase):
@@ -113,3 +125,140 @@ class IngestionRegressionTests(TestCase):
         mock_has_lasair_credentials.assert_called_once_with()
         self.assertEqual(len(mock_process_json_file.call_args_list), 2)
         self.assertTrue(all(args.args[1] is False for args in mock_process_json_file.call_args_list))
+
+
+class ExternalApiStatusTests(TestCase):
+    def setUp(self):
+        cache.delete(EXTERNAL_API_STATUS_CACHE_KEY)
+        self.superuser = get_user_model().objects.create_superuser(
+            username="admin",
+            email="admin@example.com",
+            password="pass",
+        )
+        self.user = get_user_model().objects.create_user(
+            username="user",
+            email="user@example.com",
+            password="pass",
+        )
+
+    def test_external_api_status_requires_superuser(self):
+        response = self.client.get(reverse("external-api-status"))
+        self.assertEqual(response.status_code, 302)
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("external-api-status"))
+        self.assertEqual(response.status_code, 302)
+
+        self.client.force_login(self.superuser)
+        with patch("cast.views.refresh_external_api_status") as mock_refresh:
+            mock_refresh.return_value = {"refreshed_at": "now", "services": []}
+            response = self.client.get(reverse("external-api-status"))
+        self.assertEqual(response.status_code, 200)
+
+    @patch("cast.views.refresh_external_api_status")
+    def test_external_api_status_page_refreshes_when_cache_is_empty(self, mock_refresh):
+        mock_refresh.return_value = {"refreshed_at": "now", "services": [{"name": "TNS"}]}
+        self.client.force_login(self.superuser)
+
+        response = self.client.get(reverse("external-api-status"))
+
+        self.assertEqual(response.status_code, 200)
+        mock_refresh.assert_called_once_with()
+        self.assertContains(response, "TNS")
+
+    @patch("cast.views.refresh_external_api_status")
+    def test_external_api_status_page_uses_cached_snapshot(self, mock_refresh):
+        cache.set(EXTERNAL_API_STATUS_CACHE_KEY, {"refreshed_at": "cached", "services": [{"name": "LASAIR"}]}, None)
+        self.client.force_login(self.superuser)
+
+        response = self.client.get(reverse("external-api-status"))
+
+        self.assertEqual(response.status_code, 200)
+        mock_refresh.assert_not_called()
+        self.assertContains(response, "LASAIR")
+
+    @patch("cast.views.refresh_external_api_status")
+    def test_external_api_status_manual_refresh_overwrites_cache(self, mock_refresh):
+        mock_refresh.return_value = {"refreshed_at": "new", "services": [{"name": "ATLAS"}]}
+        self.client.force_login(self.superuser)
+
+        response = self.client.post(reverse("external-api-status"))
+
+        self.assertEqual(response.status_code, 200)
+        mock_refresh.assert_called_once_with()
+        self.assertContains(response, "ATLAS")
+
+    @override_settings(BROKERS={"TNS": {"api_key": "", "bot_id": "", "bot_name": ""}}, TNS_TEST=True)
+    def test_tns_status_reports_not_configured(self):
+        status = check_tns_status()
+
+        self.assertFalse(status["configured"])
+        self.assertIsNone(status["auth_ok"])
+        self.assertEqual(status["metadata"]["environment"], "sandbox")
+
+    @override_settings(BROKERS={"TNS": {"api_key": "key", "bot_id": "1", "bot_name": "bot"}}, TNS_TEST=False)
+    @patch("cast.external_api_status.requests.post")
+    def test_tns_status_reports_success_and_prod_environment(self, mock_post):
+        response = MagicMock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {"data": []}
+        mock_post.return_value = response
+
+        status = check_tns_status()
+
+        self.assertTrue(status["configured"])
+        self.assertTrue(status["auth_ok"])
+        self.assertEqual(status["metadata"]["environment"], "production")
+
+    @override_settings(BROKERS={"LASAIR": {"api_key": "token"}}, LASAIR_API_KEY="")
+    @patch("cast.external_api_status.lasair_client")
+    def test_lasair_status_uses_normalized_token_source(self, mock_client):
+        mock_client.return_value.cone.return_value = {"object": "ZTF"}
+
+        status = check_lasair_status()
+
+        self.assertTrue(status["configured"])
+        self.assertTrue(status["auth_ok"])
+        mock_client.assert_called_once()
+        self.assertEqual(mock_client.call_args.args[0], "token")
+
+    @override_settings(BROKERS={"ATLAS": {"user_name": "atlas", "password": "secret"}})
+    @patch("cast.external_api_status.requests.post")
+    def test_atlas_status_reports_auth_failure(self, mock_post):
+        response = MagicMock()
+        response.status_code = 401
+        mock_post.return_value = response
+
+        status = check_atlas_status()
+
+        self.assertTrue(status["configured"])
+        self.assertFalse(status["auth_ok"])
+        self.assertEqual(status["status_label"], "auth_failed")
+
+    @patch("cast.external_api_status.build_external_api_status_snapshot")
+    def test_refresh_external_api_status_writes_cache(self, mock_build):
+        mock_build.return_value = {"refreshed_at": "stored", "services": [{"name": "TNS"}]}
+
+        snapshot = refresh_external_api_status()
+
+        self.assertEqual(snapshot["refreshed_at"], "stored")
+        self.assertEqual(get_external_api_status_snapshot()["refreshed_at"], "stored")
+
+    @override_settings(BROKERS={"LASAIR": {"api_key": "broker-token"}}, LASAIR_API_KEY="")
+    def test_get_lasair_api_token_prefers_broker_value(self):
+        self.assertEqual(get_lasair_api_token(), "broker-token")
+        self.assertTrue(has_lasair_credentials())
+
+    @override_settings(BROKERS={"LASAIR": {}}, LASAIR_API_KEY="legacy-token")
+    def test_get_lasair_api_token_falls_back_to_legacy_setting(self):
+        self.assertEqual(get_lasair_api_token(), "legacy-token")
+        self.assertTrue(has_lasair_credentials())
+
+    @override_settings(BROKERS={"TNS": {"api_key": "key", "bot_id": "1", "bot_name": "bot"}}, TNS_TEST=True)
+    @patch("cast.external_api_status.requests.post", side_effect=requests.Timeout("boom"))
+    def test_tns_status_reports_network_error(self, _mock_post):
+        status = check_tns_status()
+
+        self.assertTrue(status["configured"])
+        self.assertFalse(status["auth_ok"])
+        self.assertEqual(status["status_label"], "network_error")

@@ -37,6 +37,15 @@ LASAIR_ENDPOINT = "https://lasair-ztf.lsst.ac.uk/api"
 LASAIR_CONE_RADIUS = 5.0  # arcseconds
 
 
+def get_lasair_api_token():
+    lasair_settings = settings.BROKERS.get('LASAIR', {})
+    return (
+        lasair_settings.get('api_token')
+        or lasair_settings.get('api_key')
+        or settings.LASAIR_API_KEY
+    )
+
+
 def photometry_exists(candidate, obs_date, magnitude, magnitude_error, filter_band='clear'):
     """
     Check if a photometry entry already exists for a given candidate, observation date, magnitude, and filter.
@@ -211,14 +220,13 @@ def get_ztf_fp(candidate, days_ago=10):
     Get the ZTF forced photometry for a candidate.
     """
     logger.info(f"Getting ZTF photometry for {candidate.name}")
-    lasair_settings = settings.BROKERS.get('LASAIR', {})
-    api_token = lasair_settings.get('api_token')
+    api_token = get_lasair_api_token()
     if not api_token:
         logger.info(f"Skipping ZTF forced photometry for candidate {candidate.id}: LASAIR credentials not configured")
         return None
     
     try:
-        L = lasair_client(lasair_settings['api_token'], endpoint=LASAIR_ENDPOINT)
+        L = lasair_client(api_token, endpoint=LASAIR_ENDPOINT)
 
         result = L.cone(ra=candidate.ra, dec=candidate.dec,
                         radius=LASAIR_CONE_RADIUS, requestType='nearest')

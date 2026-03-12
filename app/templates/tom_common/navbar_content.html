@@ -58,11 +58,6 @@ For customization instructions, see tom_common/base.html
     <a class="nav-link" href="{% url 'tom_dataproducts:list' %}">Data</a>
 </li> -->
 <!-- {% navbar_app_addons %} -->
-{% if request.user.is_superuser %}
-<li class="nav-item {% if 'user' in request.resolver_match.url_name %}active{% endif %}">
-    <a class="nav-link" href="{% url 'user-list' %}">Users</a>
-</li>
-{% endif %}
 <!-- <li class="nav-item {% if 'user' in request.resolver_match.url_name %}active{% endif %}">
     <a class="nav-link" href="{% url 'about' %}">About</a>
 </li> -->

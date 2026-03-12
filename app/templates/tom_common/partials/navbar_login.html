@@ -6,6 +6,11 @@
     <a class="nav-link" href="{% url 'user-list' %}">Users</a>
 </li>
 {% endif %}
+{% if user.is_superuser %}
+<li class="nav-item {% if request.resolver_match.url_name == 'external-api-status' %}active{% endif %}">
+    <a class="nav-link" href="{% url 'external-api-status' %}">External API Status</a>
+</li>
+{% endif %}
 <li class="nav-item">
     {% if user.first_name or user.last_name %}
         <a class="nav-link" href="{% url 'user-profile' %}">{{ user.first_name }} {{ user.last_name }} ({{ user.username }})</a>
