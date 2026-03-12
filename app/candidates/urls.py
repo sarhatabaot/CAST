@@ -8,6 +8,7 @@ urlpatterns = [
     path('messages/', views.messages_fragment, name='messages_fragment'),
     path('list/', views.candidate_list_view, name='list'),  # List all candidates
     path('<int:candidate_id>/', views.candidate_detail, name='candidate_detail'),
+    path('<int:candidate_id>/comments/', views.candidate_comments_view, name='candidate_comments'),
     path('upload/', views.upload_file_view, name='upload'),  # Upload candidates via a file
     path('delete/', views.delete_candidate_view, name='delete_candidate'),  # URL for deletion
     path('add_target/', views.add_target_view, name='add_target'),  # URL for Add Target

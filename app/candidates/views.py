@@ -9,14 +9,17 @@ from astropy.coordinates import SkyCoord
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.contenttypes.models import ContentType
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.db.models import Subquery, OuterRef
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.safestring import mark_safe
+from django.contrib.sites.shortcuts import get_current_site
+from django_comments.models import Comment
 from tom_targets.models import Target
 
 from .astro_colibri import prepare_astro_colibri_data, send_astro_colibri
@@ -502,7 +505,24 @@ def update_real_bogus_view(request, candidate_id):
         candidate.real_bogus_user = full_name or user.username
 
         candidate.save()
-        messages.success(request, f"Updated {candidate.name} to {candidate.get_real_bogus_display()}.")
+
+        if candidate.real_bogus is True:
+            existing_target = check_target_exists_for_candidate(candidate.id)
+            try:
+                target = add_candidate_as_target(candidate.id)
+            except Exception as e:
+                messages.error(
+                    request,
+                    f"Updated {candidate.name} to {candidate.get_real_bogus_display()}, but failed to ensure a target exists: {e}"
+                )
+            else:
+                action = "reused" if existing_target else "created"
+                messages.success(
+                    request,
+                    f"Updated {candidate.name} to {candidate.get_real_bogus_display()} and {action} target {target.name}."
+                )
+        else:
+            messages.success(request, f"Updated {candidate.name} to {candidate.get_real_bogus_display()}.")
 
         # Append anchor to scroll back to the candidate
         if candidate_id:
@@ -708,6 +728,61 @@ def candidate_detail(request, candidate_id):
         'coords': coords,
     }
     return render(request, 'candidates/candidate_detail.html', context)
+
+
+def candidate_comments_view(request, candidate_id):
+    candidate = get_object_or_404(Candidate, id=candidate_id)
+    next_url = request.POST.get("next") or request.GET.get("next") or reverse(
+        "candidates:candidate_detail", args=[candidate.id]
+    )
+
+    comment_error = None
+    if request.method == "POST":
+        if not request.user.is_authenticated:
+            return HttpResponseForbidden("Authentication required to comment.")
+
+        comment_text = request.POST.get("comment", "").strip()
+        if not comment_text:
+            comment_error = "Comment cannot be empty."
+        else:
+            Comment.objects.create(
+                content_type=ContentType.objects.get_for_model(candidate),
+                object_pk=str(candidate.pk),
+                user=request.user,
+                user_name=request.user.get_full_name() or request.user.get_username(),
+                user_email=request.user.email,
+                comment=comment_text,
+                site=get_current_site(request),
+            )
+
+        if not request.htmx:
+            return redirect(next_url)
+
+    return render_candidate_comments_response(
+        request,
+        candidate,
+        next_url=next_url,
+        comment_error=comment_error,
+    )
+
+
+def render_candidate_comments_response(request, candidate, *, next_url=None, comment_error=None):
+    comment_list = Comment.objects.filter(
+        content_type=ContentType.objects.get_for_model(candidate),
+        object_pk=str(candidate.pk),
+        is_public=True,
+        is_removed=False,
+    ).order_by("submit_date")
+    return render(
+        request,
+        "candidates/partials/_candidate_comments_section.html",
+        {
+            "comment_candidate": candidate,
+            "comment_list": comment_list,
+            "comment_error": comment_error,
+            "comment_next_url": next_url or request.get_full_path(),
+        },
+    )
 
 
 def horizons_view(request, candidate_id):

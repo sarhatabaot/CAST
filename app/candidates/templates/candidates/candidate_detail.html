@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load static %}
+{% load candidates_tags static %}
 {% block main_container_class %}
 container-fluid px-3
 {% endblock %}
@@ -96,6 +96,8 @@ container-fluid px-3
                     {% endfor %}
                 </div>
             </div>
+            <hr>
+            {% candidate_comments candidate %}
         </div>
     </div>
 

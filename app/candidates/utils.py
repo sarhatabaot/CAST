@@ -226,6 +226,19 @@ def check_target_exists_for_candidate(candidate_id, radius_arcsec=3):
     return matching_targets.first()
 
 
+def check_candidate_exists_for_target(target, radius_arcsec=3):
+    """
+    Checks if a candidate exists for a given target using a cone search.
+    :param target: Target instance.
+    :param radius_arcsec: Radius of the cone search in arcseconds (default is 3").
+    :return: The first matching Candidate object or None if no match is found.
+    """
+    radius_deg = radius_arcsec / 3600.0
+    queryset = Candidate.objects.all()
+    matching_candidates = cone_search_filter_candidates(queryset, target.ra, target.dec, radius_deg)
+    return matching_candidates.first()
+
+
 def transfer_candidate_photometry_to_target(candidate, target):
     """
     Transfers all photometry data from a candidate to a target as ReducedDatum entries.
