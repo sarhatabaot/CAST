@@ -1,5 +1,15 @@
 # CAST Changes
 
+## 2026-03-18
+- Add admin external API status dashboard with dedicated CAST URLs, template, navbar access, and startup monitoring integration
+- Disable unavailable candidate actions in the UI based on external API availability and add coverage for action-state behavior
+- Unify candidate comments into a single canonical discussion thread shared with target detail pages and move candidate comments beneath survey cutouts with HTMX posting support
+- Automatically create or reuse a target when marking a candidate as real and add migration support for moving target comments into candidate discussions
+- Switch ATLAS authentication from username/password to API key configuration and update environment examples, tests, and status checks accordingly
+- Fix observed fields plot media URL handling and add regression tests for the LAST observed fields view
+- Filter GLADE host-galaxy redshifts using the distance reliability flag before propagating values to candidates
+- Move the about page template into the CAST app template directory and remove the old duplicate template path
+
 ## 2026-02-26
 - Implement custom permission-based authentication system for Candidates module: replace hardcoded group-based access with flexible permission system using `candidates.can_view_candidates` permission
 - Create permission signals in app/candidates/signals.py for automatic permission creation during app initialization
