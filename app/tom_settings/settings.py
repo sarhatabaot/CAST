@@ -302,6 +302,9 @@ BROKERS = {
         'bot_id': env.str('TNS_BOT_ID', default=''),
         'bot_name': env.str('TNS_BOT_NAME', default=''),
     },
+    'ATLAS': {
+        'api_token': env.str('ATLAS_API_TOKEN', default=''),
+    },
     'LASAIR': {
         'api_key': env.str('LASAIR_API_KEY', default=''),
     },

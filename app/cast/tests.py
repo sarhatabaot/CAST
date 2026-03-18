@@ -222,12 +222,12 @@ class ExternalApiStatusTests(TestCase):
         mock_client.assert_called_once()
         self.assertEqual(mock_client.call_args.args[0], "token")
 
-    @override_settings(BROKERS={"ATLAS": {"user_name": "atlas", "password": "secret"}})
-    @patch("cast.external_api_status.requests.post")
-    def test_atlas_status_reports_auth_failure(self, mock_post):
+    @override_settings(BROKERS={"ATLAS": {"api_token": "secret"}})
+    @patch("cast.external_api_status.requests.get")
+    def test_atlas_status_reports_auth_failure(self, mock_get):
         response = MagicMock()
         response.status_code = 401
-        mock_post.return_value = response
+        mock_get.return_value = response
 
         status = check_atlas_status()
 

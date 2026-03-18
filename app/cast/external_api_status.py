@@ -28,7 +28,7 @@ def _tns_configured():
 
 def _atlas_configured():
     atlas_settings = settings.BROKERS.get("ATLAS", {})
-    return bool(atlas_settings.get("user_name") and atlas_settings.get("password"))
+    return bool(atlas_settings.get("api_token"))
 
 
 def _astro_colibri_configured():
@@ -139,24 +139,18 @@ def check_atlas_status():
     if not configured:
         return status
 
+    token = atlas_settings["api_token"]
+    headers = {"Authorization": f"Token {token}", "Accept": "application/json"}
+
     try:
-        response = requests.post(
-            f"{ATLAS_BASEURL}/api-token-auth/",
-            data={
-                "username": atlas_settings["user_name"],
-                "password": atlas_settings["password"],
-            },
-            timeout=CHECK_TIMEOUT,
-        )
-        if response.status_code == 200 and response.json().get("token"):
+        response = requests.get(f"{ATLAS_BASEURL}/queue/", headers=headers, timeout=CHECK_TIMEOUT)
+        if response.status_code == 200:
             return _mark_ok(status, "Authenticated successfully against ATLAS.")
-        if response.status_code in {400, 401, 403}:
+        if response.status_code in {401, 403}:
             return _mark_failure(status, "auth_failed", f"ATLAS returned HTTP {response.status_code}.")
         return _mark_failure(status, "network_error", f"ATLAS returned HTTP {response.status_code}.")
     except requests.RequestException as exc:
         return _mark_failure(status, "network_error", f"ATLAS request failed: {exc}")
-    except ValueError as exc:
-        return _mark_failure(status, "unknown", f"ATLAS returned invalid JSON: {exc}")
 
 
 def check_astro_colibri_status():

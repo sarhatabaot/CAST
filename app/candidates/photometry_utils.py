@@ -111,23 +111,14 @@ def get_atlas_fp(candidate, days_ago=10):
     """
     
     atlas_settings = settings.BROKERS.get('ATLAS', {})
-    username = atlas_settings.get('user_name')
-    password = atlas_settings.get('password')
-    if not username or not password:
-        logger.error("ATLAS API credentials not set.")
+    token = atlas_settings.get('api_token')
+    if not token:
+        logger.error("ATLAS API token not set.")
         return None
 
     try:
-        resp = requests.post(url=f"{ATLAS_BASEURL}/api-token-auth/",
-                             data={'username': {username}, 'password': {password}})
+        headers = {'Authorization': f'Token {token}', 'Accept': 'application/json'}
 
-        if resp.status_code == 200:
-            token = resp.json()['token']
-            headers = {'Authorization': f'Token {token}', 'Accept': 'application/json'}
-        else:
-            logger.error(f'ERROR {resp.status_code}')
-            logger.error(resp.json())
-            
         task_url = None
         while not task_url:
             with requests.Session() as s:
