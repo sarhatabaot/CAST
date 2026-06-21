@@ -83,7 +83,7 @@ def migrate_target_comments_to_candidates(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("candidates", "0001_initial"),
+        ("candidates", "0022_candidate_too_name_candidate_classification_and_more"),
         ("contenttypes", "0002_remove_content_type_name"),
         ("django_comments", "0004_add_object_pk_is_removed_index"),
         ("tom_targets", "0030_alter_basetarget_slope"),
