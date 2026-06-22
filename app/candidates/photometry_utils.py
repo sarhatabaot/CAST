@@ -66,11 +66,11 @@ def photometry_exists(candidate, obs_date, magnitude, magnitude_error, filter_ba
 
 
 def add_photometry_from_last_report(candidate, last_report):
-    detections_jd = np.array(last_report.get('detections_jd', {}))
-    detections = last_report.get('detections_mag', {})
-    detections_magerr = last_report.get('detections_magerr', {})
-    nondetections_jd = last_report.get('nondetections_jd', {})
-    nondetections_mag = last_report.get('nondetections_mag', {})
+    detections_jd = np.array(last_report.get('detections_jd', []))
+    detections = last_report.get('detections_mag', [])
+    detections_magerr = last_report.get('detections_magerr', [])
+    nondetections_jd = last_report.get('nondetections_jd', [])
+    nondetections_mag = last_report.get('nondetections_mag', [])
 
     for i, jd in enumerate(detections_jd):
         obs_date = Time(jd, format='jd').to_datetime(timezone=dt_timezone.utc)
@@ -175,7 +175,7 @@ def get_atlas_fp(candidate, days_ago=10):
         SNT = 5.
 
         for obs in dfresult.iloc:
-            obs_date = Time(obs.MJD,format='mjd').to_datetime()
+            obs_date = Time(obs.MJD, format='mjd').to_datetime(timezone=dt_timezone.utc)
             if obs.uJy/obs.duJy >= SNT:
                 magnitude = obs.m  # Detection
                 magnitude_error = obs.dm
@@ -189,7 +189,7 @@ def get_atlas_fp(candidate, days_ago=10):
                                      magnitude_error, filter_band=obs.F):
                 CandidatePhotometry.objects.create(
                     candidate=candidate,
-                    obs_date=make_aware(obs_date),
+                    obs_date=obs_date,
                     magnitude=magnitude,  # Null if non-detection
                     magnitude_error=magnitude_error,
                     filter_band=obs.F,  # Use a mapping if needed to human-readable filter names
@@ -233,7 +233,7 @@ def get_ztf_fp(candidate, days_ago=10):
         dfresult = dfresult[dfresult['jd'] > Time.now().jd - days_ago]
 
         for obs in dfresult.iloc:
-            obs_date = Time(obs.jd,format='jd').to_datetime()
+            obs_date = Time(obs.jd, format='jd').to_datetime(timezone=dt_timezone.utc)
             filter_band = 'g' if obs.fid ==1 else 'r'  # fid=1 green, fid=2 red
             if not pd.isna(obs.candid):
                 magnitude = obs.magpsf  # Detection
@@ -248,7 +248,7 @@ def get_ztf_fp(candidate, days_ago=10):
                                      magnitude_error, filter_band=filter_band):
                 CandidatePhotometry.objects.create(
                     candidate=candidate,
-                    obs_date=make_aware(obs_date),
+                    obs_date=obs_date,
                     magnitude=magnitude,  # Null if non-detection
                     magnitude_error=magnitude_error,
                     filter_band=filter_band,

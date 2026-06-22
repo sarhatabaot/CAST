@@ -1,6 +1,8 @@
 # CAST Changes
 
 ## 2026-06-22
+- Fix observation and discovery times being dropped when ingesting AT-format reports: the `" UTC"` suffix on report datetimes made parsing fail and store null timestamps; `ensure_aware_utc` now understands the suffix and is used consistently across the ingestion paths
+- Harden photometry time handling: convert ATLAS/ZTF forced-photometry timestamps explicitly to UTC instead of relying on `TIME_ZONE`, and correct the `last_report` ingestion defaults (`{}` → `[]`) so a missing detections list no longer raises a swallowed error
 - Add a "LegacySurvey Viewer" action button to each candidate that opens the Legacy Survey sky viewer (with DESI EDR/DR1 spectra) at the candidate's coordinates in a new tab, useful where SDSS SkyServer lacks coverage (implements https://github.com/erezimm/CAST/issues/57)
 
 ## 2026-06-21

@@ -20,6 +20,12 @@ def ensure_aware_utc(dt):
 
     # Handle string
     if isinstance(dt, str):
+        dt = dt.strip()
+        # AT-report datetimes carry a trailing "UTC" label (e.g. "2024-09-01 12:34:56 UTC")
+        # that parse_datetime cannot handle (it expects an ISO offset like +00:00 or Z).
+        # Strip it and let the naive -> UTC step below attach the timezone.
+        if dt.upper().endswith("UTC"):
+            dt = dt[:-3].rstrip()
         dt = parse_datetime(dt)
         if dt is None:
             return None
@@ -69,13 +75,7 @@ def parse_json_file(file) -> ParsedAlertPayload:
         raise ValueError(f"Missing or invalid RA/Dec in file {file.name}")
 
     discovery_datetime_raw = at_report.get("discovery_datetime", {})[0]
-    discovery_datetime_raw = discovery_datetime_raw[
-        : discovery_datetime_raw.find("UTC") - 1
-    ]
-
-    discovery_datetime = ensure_aware_utc(
-        parse_datetime(discovery_datetime_raw)
-    )
+    discovery_datetime = ensure_aware_utc(discovery_datetime_raw)
 
 
     return ParsedAlertPayload(

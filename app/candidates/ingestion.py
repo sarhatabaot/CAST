@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from enum import Enum
 
 from django.conf import settings
-from django.utils.dateparse import parse_datetime
 
 from candidates.models import CandidatePhotometry, CandidateDataProduct
 from candidates.photometry_utils import add_photometry_from_last_report, get_atlas_fp, get_ztf_fp, get_lasair_api_token
@@ -62,7 +61,7 @@ def process_json_file(file, lasair_enabled: bool = None) -> tuple[int, Ingestion
         non_detection = at_report.get("non_detection", {})
         if non_detection:
             raw_obs_date = non_detection.get("obsdate", [None])[0]
-            obs_date = ensure_aware_utc(parse_datetime(raw_obs_date))
+            obs_date = ensure_aware_utc(raw_obs_date)
             limit = non_detection.get("flux")
             filter_value = non_detection.get("filter_value")
 
@@ -79,7 +78,7 @@ def process_json_file(file, lasair_enabled: bool = None) -> tuple[int, Ingestion
         obs_date = photometry_data.get("obsdate", [None])[0]
         if obs_date:
             raw_obs_date = non_detection.get("obsdate", [None])[0]
-            obs_date = ensure_aware_utc(parse_datetime(raw_obs_date))
+            obs_date = ensure_aware_utc(raw_obs_date)
             magnitude = photometry_data.get("flux")
             filter_value = photometry_data.get("filter_value")
 
