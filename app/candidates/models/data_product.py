@@ -1,5 +1,3 @@
-import os
-
 from candidates.models.candidate import Candidate
 from django.db import models
 
@@ -23,16 +21,8 @@ class CandidateDataProduct(models.Model):
     description = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    def delete(self, *args, **kwargs):
-        """
-        Override the delete method to ensure the associated file is deleted.
-        """
-        if self.datafile and os.path.isfile(self.datafile.path):
-            try:
-                os.remove(self.datafile.path)
-            except Exception as e:
-                print(f"Error deleting file {self.datafile.path}: {e}")
-        super().delete(*args, **kwargs)
+    # File cleanup on delete is handled centrally by the post_delete signal
+    # (candidates/models/signals.py), which covers direct, queryset, and cascade deletes.
 
     def __str__(self):
         return f"{self.name} (Candidate: {self.candidate.name})"

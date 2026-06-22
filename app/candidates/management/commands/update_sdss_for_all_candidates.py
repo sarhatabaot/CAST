@@ -13,6 +13,7 @@ class Command(BaseCommand):
                 sdss_cutout = fetch_sdss_cutout(candidate.ra, candidate.dec)
             except Exception as e:
                 print (f"Error fetching SDSS cutout for {candidate.name}: {e}")
+                continue
 
             if sdss_cutout:
                 CandidateDataProduct.objects.create(

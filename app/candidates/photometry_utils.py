@@ -119,12 +119,22 @@ def get_atlas_fp(candidate, days_ago=10):
     try:
         headers = {'Authorization': f'Token {token}', 'Accept': 'application/json'}
 
+        ATLAS_TIMEOUT = 30          # seconds per HTTP call
+        MAX_QUEUE_ATTEMPTS = 10     # bound the queue/throttle retry loop
+        MAX_POLL_ATTEMPTS = 60      # ~10 min of polling at 10s intervals
+
         task_url = None
+        queue_attempts = 0
         while not task_url:
+            queue_attempts += 1
+            if queue_attempts > MAX_QUEUE_ATTEMPTS:
+                logger.error(f'Gave up queueing ATLAS task for {candidate.name} after {MAX_QUEUE_ATTEMPTS} attempts')
+                return None
             with requests.Session() as s:
                 resp = s.post(f"{ATLAS_BASEURL}/queue/", headers=headers,
                               data={'ra': str(candidate.ra), 'dec': str(candidate.dec),
-                                    'mjd_min': Time(now()).mjd - days_ago, 'send_email': False})
+                                    'mjd_min': Time(now()).mjd - days_ago, 'send_email': False},
+                              timeout=ATLAS_TIMEOUT)
 
                 if resp.status_code == 201:  # successfully queued
                     task_url = resp.json()['url']
@@ -143,14 +153,19 @@ def get_atlas_fp(candidate, days_ago=10):
                         waittime = 10
                     logger.debug(f'Waiting {waittime} seconds')
                     time.sleep(waittime)
-                else:
-                    logger.error(f'ERROR {resp.status_code}')
-                    logger.error(resp.json())
+                else:  # terminal error (auth, server error, etc.) — don't loop forever
+                    logger.error(f'ATLAS queue request failed: {resp.status_code} {resp.text[:500]}')
+                    return None
 
         result_url = None
+        poll_attempts = 0
         while not result_url:
+            poll_attempts += 1
+            if poll_attempts > MAX_POLL_ATTEMPTS:
+                logger.error(f'ATLAS task for {candidate.name} did not complete after {MAX_POLL_ATTEMPTS} polls')
+                return None
             with requests.Session() as s:
-                resp = s.get(task_url, headers=headers)
+                resp = s.get(task_url, headers=headers, timeout=ATLAS_TIMEOUT)
 
                 if resp.status_code == 200:  # HTTP OK
                     if resp.json()['finishtimestamp']:
@@ -162,10 +177,9 @@ def get_atlas_fp(candidate, days_ago=10):
                     else:
                         logger.debug("Waiting for job to start. Checking again in 10 seconds...")
                     time.sleep(10)
-                else:
-                    logger.error(f'ERROR {resp.status_code}')
-                    logger.error(resp.json())
-                    # sys.exit()
+                else:  # terminal error — don't loop forever
+                    logger.error(f'ATLAS task poll failed: {resp.status_code} {resp.text[:500]}')
+                    return None
 
         with requests.Session() as s:
             textdata = s.get(result_url, headers=headers).text

@@ -16,8 +16,8 @@ from django.conf import settings
 from django.contrib.auth.models import Group
 from django.core.files import File
 from django.core.files.base import ContentFile
-from django.db.models import ExpressionWrapper, FloatField
-from django.db.models.functions import ACos, Cos, Pi, Radians, Sin
+from django.db.models import ExpressionWrapper, FloatField, Value
+from django.db.models.functions import ACos, Cos, Greatest, Least, Pi, Radians, Sin
 from django.shortcuts import get_object_or_404
 from guardian.shortcuts import assign_perm
 from tom_dataproducts.models import ReducedDatum
@@ -75,11 +75,16 @@ def cone_search_filter(queryset, ra, dec, radius):
         dec__gte=dec - double_radius, dec__lte=dec + double_radius
     )
 
+    # Clamp the cosine term to [-1, 1] before ACos: floating-point rounding can push
+    # it slightly outside that range for (near-)identical coordinates, which makes the
+    # DB's acos() error out or return NULL — exactly the exact-duplicate dedup case.
+    cos_separation = (
+        (Sin(radians(dec)) * Sin(Radians('dec'))) +
+        (Cos(radians(dec)) * Cos(Radians('dec')) * Cos(radians(ra) - Radians('ra')))
+    )
     separation = ExpressionWrapper(
-        180 * ACos(
-            (Sin(radians(dec)) * Sin(Radians('dec'))) +
-            (Cos(radians(dec)) * Cos(Radians('dec')) * Cos(radians(ra) - Radians('ra')))
-        ) / Pi(), FloatField()
+        180 * ACos(Least(Value(1.0), Greatest(Value(-1.0), cos_separation))) / Pi(),
+        FloatField()
     )
 
     return queryset.annotate(separation=separation).filter(separation__lte=radius)
@@ -119,11 +124,16 @@ def cone_search_filter_candidates(queryset, ra, dec, radius):
     #     dec__gte=dec - double_radius, dec__lte=dec + double_radius
     # )
     # Angular separation calculation
+    # Clamp the cosine term to [-1, 1] before ACos: floating-point rounding can push
+    # it slightly outside that range for (near-)identical coordinates, which makes the
+    # DB's acos() error out or return NULL — exactly the exact-duplicate dedup case.
+    cos_separation = (
+        (Sin(radians(dec)) * Sin(Radians('dec'))) +
+        (Cos(radians(dec)) * Cos(Radians('dec')) * Cos(radians(ra) - Radians('ra')))
+    )
     separation = ExpressionWrapper(
-        180 * ACos(
-            (Sin(radians(dec)) * Sin(Radians('dec'))) +
-            (Cos(radians(dec)) * Cos(Radians('dec')) * Cos(radians(ra) - Radians('ra')))
-        ) / Pi(), FloatField()
+        180 * ACos(Least(Value(1.0), Greatest(Value(-1.0), cos_separation))) / Pi(),
+        FloatField()
     )
 
     # Annotate queryset with separation and filter by the radius

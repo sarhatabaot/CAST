@@ -1,34 +1,29 @@
-import os
+import logging
 
-from candidates.models.candidate import Candidate
 from candidates.models.data_product import CandidateDataProduct
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
-from django.db import models
 from django.dispatch import receiver
 from django.db.models.signals import post_delete, post_migrate
+
+logger = logging.getLogger(__name__)
 
 
 @receiver(post_delete, sender=CandidateDataProduct)
 def delete_datafile(sender, instance, **kwargs):
     """
-    Deletes the file associated with a CandidateDataProduct when the instance is deleted.
+    Delete the file backing a CandidateDataProduct when its row is removed.
+
+    This is the single source of truth for file cleanup: it fires on direct
+    deletes, queryset deletes, and cascade deletes (when a Candidate is removed,
+    its data products are CASCADE-deleted and each emits this signal). Uses the
+    storage API so it works regardless of the storage backend.
     """
-    if instance.datafile and os.path.isfile(instance.datafile.path):
+    if instance.datafile:
         try:
-            os.remove(instance.datafile.path)
+            instance.datafile.delete(save=False)
         except Exception as e:
-            print(f"Error deleting file {instance.datafile.path}: {e}")
-
-
-@receiver(post_delete, sender=Candidate)
-def delete_candidate_data_products(sender, instance, **kwargs):
-    """
-    Deletes all data products associated with a Candidate when the Candidate is deleted.
-    """
-    data_products = CandidateDataProduct.objects.filter(candidate=instance)
-    for data_product in data_products:
-        data_product.delete()
+            logger.warning(f"Error deleting file for data product {instance.pk}: {e}")
 
 
 @receiver(post_migrate)

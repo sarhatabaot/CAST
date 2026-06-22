@@ -7,7 +7,7 @@ class Command(BaseCommand):
     help = 'Ingest multiple JSON files as candidates'
 
     def add_arguments(self, parser):
-        parser.add_argument('file', type=str, help='JSON file')
+        parser.add_argument('directory', type=str, help='Directory containing JSON files')
 
     def handle(self, *args, **kwargs):
         directory = kwargs['directory']

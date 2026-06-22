@@ -74,7 +74,10 @@ def parse_json_file(file) -> ParsedAlertPayload:
     except (KeyError, TypeError, ValueError):
         raise ValueError(f"Missing or invalid RA/Dec in file {file.name}")
 
-    discovery_datetime_raw = at_report.get("discovery_datetime", {})[0]
+    try:
+        discovery_datetime_raw = at_report["discovery_datetime"][0]
+    except (KeyError, IndexError, TypeError):
+        raise ValueError(f"Missing or invalid discovery_datetime in file {file.name}")
     discovery_datetime = ensure_aware_utc(discovery_datetime_raw)
 
 
