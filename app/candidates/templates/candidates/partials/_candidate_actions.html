@@ -68,6 +68,15 @@
     NED Lookup
 </a>
 
+<!-- LegacySurvey Viewer (sky coverage + DESI spectra) -->
+<a href="https://www.legacysurvey.org/viewer?ra={{ item.candidate.ra }}&dec={{ item.candidate.dec }}&layer=ls-dr9&zoom=16&desi-spec-edr&desi-spec-dr1"
+   class="btn btn-sm btn-secondary btn-legacysurvey"
+   style="background-color: rgb(102, 51, 153); border-color: rgb(102, 51, 153);"
+   target="_blank"
+   rel="noopener">
+    LegacySurvey Viewer
+</a>
+
 {% if not item.candidate.tns_name %}
     <!-- possibly can use a function to get the correct url..? same for the others -->
     {% if tns_test %}

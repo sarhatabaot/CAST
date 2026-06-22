@@ -1,5 +1,8 @@
 # CAST Changes
 
+## 2026-06-22
+- Add a "LegacySurvey Viewer" action button to each candidate that opens the Legacy Survey sky viewer (with DESI EDR/DR1 spectra) at the candidate's coordinates in a new tab, useful where SDSS SkyServer lacks coverage (implements https://github.com/erezimm/CAST/issues/57)
+
 ## 2026-06-21
 - Replace the TNS report group authorization gate so unauthorized users get a clear "you do not have permission" message and a disabled, tooltip-explained button instead of being redirected into an unusable re-authentication loop
 - Make the TNS reporting authorization configurable via a `TNS_REPORT_GROUPS` list so additional auth groups can be granted access without code changes, shared as a single source of truth between views and templates
