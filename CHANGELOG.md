@@ -1,5 +1,11 @@
 # CAST Changes
 
+## 2026-06-21
+- Replace the TNS report group authorization gate so unauthorized users get a clear "you do not have permission" message and a disabled, tooltip-explained button instead of being redirected into an unusable re-authentication loop
+- Make the TNS reporting authorization configurable via a `TNS_REPORT_GROUPS` list so additional auth groups can be granted access without code changes, shared as a single source of truth between views and templates
+- Require the submitting user to have a first and last name set before sending a TNS report, with an actionable message instead of an `IndexError` during reporter-name formatting
+- Move the hardcoded TNS reporter list and special name-formatting cases out of the Python code into a loadable `candidates/config/tns_reporters.json` file (path overridable via `TNS_REPORTERS_CONFIG_PATH`)
+
 ## 2026-03-18
 - Add admin external API status dashboard with dedicated CAST URLs, template, navbar access, and startup monitoring integration
 - Disable unavailable candidate actions in the UI based on external API availability and add coverage for action-state behavior

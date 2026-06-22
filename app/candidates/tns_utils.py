@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import time
 from collections import OrderedDict
 from io import StringIO
@@ -14,6 +15,42 @@ logger = logging.getLogger(__name__)
 
 # TNS reporting configuration
 TNS_REPLY_WAIT_TIME = 5  # seconds to wait before checking report status
+
+# Reporter list and name-formatting rules live in a JSON file so they can be edited
+# without touching the code. Override the location with settings.TNS_REPORTERS_CONFIG_PATH.
+DEFAULT_TNS_REPORTERS_PATH = os.path.join(os.path.dirname(__file__), 'config', 'tns_reporters.json')
+
+
+def load_reporter_config() -> Dict:
+    """
+    Load the TNS reporter configuration from JSON.
+
+    Returns a dict with the base reporter list, affiliation/closing strings, and the
+    special name-formatting cases. Falls back to an empty config (logging the error)
+    if the file is missing or invalid, so reporting degrades rather than crashing.
+    """
+    path = getattr(settings, 'TNS_REPORTERS_CONFIG_PATH', None) or DEFAULT_TNS_REPORTERS_PATH
+    try:
+        with open(path, 'r', encoding='utf-8') as config_file:
+            return json.load(config_file)
+    except (OSError, json.JSONDecodeError) as e:
+        logger.error(f"Failed to load TNS reporter config from {path}: {e}")
+        return {}
+
+
+def _build_base_reporters(config: Dict) -> str:
+    """Build the formatted base reporter string from the loaded config."""
+    affiliation = config.get('affiliation', '(WIS)')
+    closing = config.get('closing', 'on behalf of the LAST Collaboration')
+    affiliated = [f"{name} {affiliation}".strip() for name in config.get('base_reporters', [])]
+
+    if not affiliated:
+        return closing
+    if len(affiliated) == 1:
+        return f"{affiliated[0]} {closing}".strip()
+
+    *leading, last = affiliated
+    return f"{', '.join(leading)}, and {last} {closing}".strip()
 
 
 def tns_cone_search(ra: float, dec: float, radius: float = 3.0) -> Optional[Dict]:
@@ -222,20 +259,27 @@ def format_reporter_name(first_name: str, last_name: str) -> str:
     Returns:
         str: Formatted reporter string with the specified reporter first
     """
-    base_reporters = (
-        "R. Konno (WIS), E. A. Zimmerman (WIS), A. Horowicz (WIS), S. Garrappa (WIS), "
-        "E. O. Ofek (WIS), S. Ben-Ami (WIS), D. Polishook (WIS), O. Yaron (WIS), "
-        "P. Chen (WIS), A. Krassilchtchikov (WIS), Y. M. Shani (WIS), E. Segre (WIS), "
-        "A. Gal-Yam (WIS), S. Spitzer (WIS), and K. Rybicki (WIS) on behalf of the LAST Collaboration"
-    )
+    config = load_reporter_config()
+    affiliation = config.get('affiliation', '(WIS)')
+    special_middle_initials = config.get('special_name_middle_initials', {})
+    base_reporters = _build_base_reporters(config)
 
-    # Handle special name formatting cases
-    if first_name == 'Eran':
-        reporter_name = f"{first_name[0]}. O. {last_name} (WIS)"
-    elif first_name == 'Erez':
-        reporter_name = f"{first_name[0]}. A. {last_name} (WIS)"
+    first_name = (first_name or '').strip()
+    last_name = (last_name or '').strip()
+
+    # Handle special name formatting cases (e.g. people with a known middle initial)
+    if first_name in special_middle_initials and last_name:
+        middle = special_middle_initials[first_name]
+        reporter_name = f"{first_name[0]}. {middle}. {last_name} {affiliation}"
+    elif first_name and last_name:
+        reporter_name = f"{first_name[0]}. {last_name} {affiliation}"
+    elif last_name:
+        reporter_name = f"{last_name} {affiliation}"
+    elif first_name:
+        reporter_name = f"{first_name} {affiliation}"
     else:
-        reporter_name = f"{first_name[0]}. {last_name} (WIS)"
+        # No reporter name available; fall back to the collaboration list only.
+        return base_reporters
 
     # Remove existing instance if present and prepend
     base_reporters = base_reporters.replace(f"{reporter_name}, ", "")
@@ -455,7 +499,7 @@ def _process_tns_feedback(candidate, report_id: str, feedback_result: Dict, firs
         feedback_json = json.dumps(feedback_result['feedback'], indent=4)
         CandidateDataProduct.objects.create(
             candidate=candidate,
-            datafile=ContentFile(feedback_json),
+            datafile=ContentFile(feedback_json.encode('utf-8'), name=f'failed_tns_{report_id}.json'),
             data_product_type='tns',
             name=f'failed_tns_{report_id}.json'
         )
@@ -470,7 +514,7 @@ def _process_tns_feedback(candidate, report_id: str, feedback_result: Dict, firs
     feedback_json = json.dumps(feedback_data, indent=4)
     CandidateDataProduct.objects.create(
         candidate=candidate,
-        datafile=ContentFile(feedback_json),
+        datafile=ContentFile(feedback_json.encode('utf-8'), name=f'tns_{report_id}.json'),
         data_product_type='tns',
         name=f'tns_{report_id}.json'
     )

@@ -23,11 +23,27 @@ from guardian.shortcuts import assign_perm
 from tom_dataproducts.models import ReducedDatum
 from tom_targets.models import Target
 
+from .constants import TNS_REPORT_GROUPS
 from .models import Candidate, CandidateDataProduct
 
 logger = logging.getLogger(__name__)
 
 CAST_SETTINGS = settings.CAST_CANDIDATES
+
+
+def can_send_tns_report(user):
+    """
+    Whether the given user is allowed to send TNS reports / perform LAST general
+    candidate actions.
+
+    Membership of any of the `TNS_REPORT_GROUPS` auth groups grants access;
+    superusers are always allowed. This is the single source of truth shared by the
+    views and the templates so the UI and the server-side gate can never drift apart.
+    """
+    return bool(
+        getattr(user, 'is_authenticated', False)
+        and (user.is_superuser or user.groups.filter(name__in=TNS_REPORT_GROUPS).exists())
+    )
 
 def cone_search_filter(queryset, ra, dec, radius):
     """

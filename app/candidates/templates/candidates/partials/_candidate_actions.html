@@ -1,3 +1,4 @@
+{% load candidate_permissions %}
 {% if item.target %}
     <!-- Green "Target" button linking to the target detail page -->
     <a href="{% url 'targets:detail' item.target.id %}" class="btn btn-sm btn-success">
@@ -112,6 +113,18 @@
           data-toggle="tooltip"
           data-placement="top"
           title="{{ tns_status.message }}">
+        <button type="button"
+                class="btn btn-sm btn-warning"
+                disabled
+                style="pointer-events: none;">
+            Send TNS Report
+        </button>
+    </span>
+{% elif not request.user|can_send_tns_report %}
+    <span class="d-inline-block"
+          data-toggle="tooltip"
+          data-placement="top"
+          title="You do not have permission to send TNS reports.">
         <button type="button"
                 class="btn btn-sm btn-warning"
                 disabled

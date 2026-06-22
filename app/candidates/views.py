@@ -1,5 +1,6 @@
 import logging
 from collections import defaultdict
+from functools import wraps
 from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 from types import SimpleNamespace
 
@@ -31,9 +32,53 @@ from .models.candidate import CLASSIFICATION_CHOICES
 from .photometry_utils import generate_photometry_graph, get_atlas_fp, get_ztf_fp
 from .services.enrichment import update_candidate_cutouts
 from .tns_utils import send_tns_report, tns_report_details, set_reported_by_LAST
-from .utils import add_candidate_as_target, check_target_exists_for_candidate, get_horizons_data
+from .utils import (
+    add_candidate_as_target,
+    can_send_tns_report,
+    check_target_exists_for_candidate,
+    get_horizons_data,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def tns_permission_required(view_func):
+    """
+    Gate a view behind TNS-report permission.
+
+    Unlike ``user_passes_test``, which redirects an already-authenticated but
+    unauthorized user back to the login page (an unhelpful "re-authenticate" loop),
+    this shows a clear "you do not have permission" message and returns the user to
+    where they came from.
+    """
+    @wraps(view_func)
+    @login_required
+    def _wrapped(request, *args, **kwargs):
+        if not can_send_tns_report(request.user):
+            messages.error(request, "You do not have permission to send TNS reports.")
+            return_url = request.POST.get('return_url') or reverse('candidates:list')
+            return redirect(return_url)
+        return view_func(request, *args, **kwargs)
+    return _wrapped
+
+
+def _missing_reporter_name_response(request, return_url):
+    """
+    Ensure the user has a name to attribute the TNS report to.
+
+    TNS reports must name a reporter, which is taken from the user's profile. If the
+    first or last name is missing, return a redirect with a clear message instead of
+    filing a report with no attribution (or crashing while formatting the name).
+    Returns ``None`` when the name is present and the caller may proceed.
+    """
+    user = request.user
+    if not ((user.first_name or '').strip() and (user.last_name or '').strip()):
+        messages.error(
+            request,
+            "Please set your first and last name in your profile before sending a TNS report.",
+        )
+        return redirect(return_url)
+    return None
 
 
 def extract_params_from_request(request):
@@ -624,8 +669,7 @@ def update_followup_view(request, candidate_id):
     return redirect(redirect_url)
 
 
-@login_required
-@user_passes_test(lambda user: user.groups.filter(name='LAST general').exists())
+@tns_permission_required
 def send_tns_report_view(request, candidate_id):
     """
     Generates and sends a TNS report for a candidate.
@@ -634,6 +678,10 @@ def send_tns_report_view(request, candidate_id):
     at_type = request.POST.get('at_type', None)
     candidate = get_object_or_404(Candidate, id=candidate_id)
     return_url = request.POST.get('return_url', reverse('candidates:list'))
+
+    missing_name_response = _missing_reporter_name_response(request, return_url)
+    if missing_name_response is not None:
+        return missing_name_response
 
     try:
         user = request.user
@@ -655,8 +703,7 @@ def send_tns_report_view(request, candidate_id):
     return redirect(return_url)
 
 
-@login_required
-@user_passes_test(lambda user: user.groups.filter(name='LAST general').exists())
+@tns_permission_required
 def tns_report_view(request, candidate_id):
     """
     View for displaying TNS report details and manually sending the report.
@@ -665,6 +712,10 @@ def tns_report_view(request, candidate_id):
     return_url = request.POST.get('return_url', reverse('candidates:list'))
     parsed = urlparse(return_url)
     return_url = urlunparse(parsed._replace(fragment=f"candidate-{candidate_id}"))
+
+    missing_name_response = _missing_reporter_name_response(request, return_url)
+    if missing_name_response is not None:
+        return missing_name_response
 
     user = request.user
     report = tns_report_details(candidate, user.first_name, user.last_name)
