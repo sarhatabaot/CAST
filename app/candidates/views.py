@@ -18,6 +18,7 @@ from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.safestring import mark_safe
 from django.contrib.sites.shortcuts import get_current_site
 from django_comments.models import Comment
@@ -56,7 +57,7 @@ def tns_permission_required(view_func):
     def _wrapped(request, *args, **kwargs):
         if not can_send_tns_report(request.user):
             messages.error(request, "You do not have permission to send TNS reports.")
-            return_url = request.POST.get('return_url') or reverse('candidates:list')
+            return_url = _safe_return_url(request)
             return redirect(return_url)
         return view_func(request, *args, **kwargs)
     return _wrapped
@@ -81,6 +82,23 @@ def _missing_reporter_name_response(request, return_url):
     return None
 
 
+def _safe_return_url(request, default=None):
+    """
+    Return the POSTed ``return_url`` only if it points back to this site.
+
+    Guards against open-redirects: an attacker could otherwise POST
+    ``return_url=https://evil.example`` and have the view redirect off-site.
+    Falls back to the candidate list when the URL is missing or external.
+    """
+    default = default or reverse('candidates:list')
+    url = request.POST.get('return_url')
+    if url and url_has_allowed_host_and_scheme(
+        url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return url
+    return default
+
+
 def extract_params_from_request(request):
     return {
         'filter_value': request.GET.get('filter', 'all'),
@@ -95,6 +113,7 @@ def extract_params_from_request(request):
     }
 
 
+@login_required
 def upload_file_view(request):
     """
     Handles file uploads and processes candidates from a JSON file.
@@ -123,6 +142,7 @@ def upload_file_view(request):
     return render(request, 'candidates/upload.html', {'form': form})
 
 
+@login_required
 def delete_candidate_view(request):
     """
     Handles deletion of a candidate via form submission.
@@ -130,7 +150,7 @@ def delete_candidate_view(request):
     if request.method == 'POST':
         candidate_id = request.POST.get('candidate_id')  # Get candidate ID from the form
         candidate = get_object_or_404(Candidate, id=candidate_id)
-        return_url = request.POST.get('return_url', reverse('candidates:list'))
+        return_url = _safe_return_url(request)
 
         # Delete the candidate
         candidate_name = candidate.name
@@ -150,13 +170,14 @@ def delete_candidate_view(request):
     return redirect('candidates:list')
 
 
+@login_required
 def refresh_atlas_view(request, candidate_id):
     """
     Query Atlas for photometry for a candidate.
     Does not add photometry that already exists.
     """
     candidate = get_object_or_404(Candidate, id=candidate_id)
-    return_url = request.POST.get('return_url', reverse('candidates:list'))
+    return_url = _safe_return_url(request)
     try:
         daysago = request.POST.get('daysago')
         get_atlas_fp(candidate, int(daysago))
@@ -174,12 +195,13 @@ def refresh_atlas_view(request, candidate_id):
     return redirect(return_url)
 
 
+@login_required
 def set_reported_by_last_view(request, candidate_id):
     """
     Set the reported_by_LAST field for a candidate.
     """
     candidate = get_object_or_404(Candidate, id=candidate_id)
-    return_url = request.POST.get('return_url', reverse('candidates:list'))
+    return_url = _safe_return_url(request)
     try:
         set_reported_by_LAST(candidate_id)
         messages.success(request, f"Candidate {candidate.name} has been set as reported by LAST.")
@@ -197,13 +219,14 @@ def set_reported_by_last_view(request, candidate_id):
     return redirect(return_url)
 
 
+@login_required
 def refresh_ztf_view(request, candidate_id):
     """
     Query ZTF for photometry for a candidate.
     Does not add photometry that already exists.
     """
     candidate = get_object_or_404(Candidate, id=candidate_id)
-    return_url = request.POST.get('return_url', reverse('candidates:list'))
+    return_url = _safe_return_url(request)
 
     try:
         daysago = request.POST.get('daysago')
@@ -510,13 +533,14 @@ def candidate_list_view(request):
     return render(request, 'candidates/list.html', context)
 
 
+@login_required
 def add_target_view(request):
     """
     Adds a candidate as a TOM target.
     """
     if request.method == 'POST':
         candidate_id = request.POST.get('candidate_id')
-        return_url = request.POST.get('return_url', reverse('candidates:list'))
+        return_url = _safe_return_url(request)
 
         try:
             target = add_candidate_as_target(candidate_id)
@@ -537,6 +561,7 @@ def add_target_view(request):
     return redirect('candidates:list')
 
 
+@login_required
 def update_real_bogus_view(request, candidate_id):
     """
     Updates the real/bogus status of a candidate based on the button clicked.
@@ -544,7 +569,7 @@ def update_real_bogus_view(request, candidate_id):
     if request.method == 'POST':
         candidate = get_object_or_404(Candidate, id=candidate_id)
         real_bogus = request.POST.get('real_bogus')
-        return_url = request.POST.get('return_url', reverse('candidates:list'))
+        return_url = _safe_return_url(request)
 
         # Map the input to the appropriate value
         if real_bogus == 'real':
@@ -592,13 +617,14 @@ def update_real_bogus_view(request, candidate_id):
     return redirect('candidates:list')
 
 
+@login_required
 def update_classification_view(request, candidate_id):
     """
     Updates the classification status of a candidate based on the button clicked.
     """
     if request.method == 'POST':
         candidate = get_object_or_404(Candidate, id=candidate_id)
-        return_url = request.POST.get('return_url', reverse('candidates:list'))
+        return_url = _safe_return_url(request)
         classification = request.POST.get('classification')
         if classification == 'null':
             candidate.classification = None
@@ -677,7 +703,7 @@ def send_tns_report_view(request, candidate_id):
     comment = request.POST.get('comment', '').strip()
     at_type = request.POST.get('at_type', None)
     candidate = get_object_or_404(Candidate, id=candidate_id)
-    return_url = request.POST.get('return_url', reverse('candidates:list'))
+    return_url = _safe_return_url(request)
 
     missing_name_response = _missing_reporter_name_response(request, return_url)
     if missing_name_response is not None:
@@ -709,7 +735,7 @@ def tns_report_view(request, candidate_id):
     View for displaying TNS report details and manually sending the report.
     """
     candidate = get_object_or_404(Candidate, id=candidate_id)
-    return_url = request.POST.get('return_url', reverse('candidates:list'))
+    return_url = _safe_return_url(request)
     parsed = urlparse(return_url)
     return_url = urlunparse(parsed._replace(fragment=f"candidate-{candidate_id}"))
 
@@ -739,6 +765,7 @@ def tns_report_view(request, candidate_id):
     })
 
 
+@login_required
 def update_cutouts_view(request, candidate_id):
     """
     Updates the cutouts for a candidate.
@@ -849,7 +876,7 @@ def render_candidate_comments_response(request, candidate, *, next_url=None, com
 
 def horizons_view(request, candidate_id):
     candidate = get_object_or_404(Candidate, id=candidate_id)
-    return_url = request.POST.get('return_url', reverse('candidates:list'))
+    return_url = _safe_return_url(request)
     parsed = urlparse(return_url)
     return_url = urlunparse(parsed._replace(fragment=f"candidate-{candidate_id}"))
     try:
@@ -880,12 +907,13 @@ def horizons_view(request, candidate_id):
     return render(request, 'candidates/horizon.html', context)
 
 
+@login_required
 def send_astro_colibri_view(request, candidate_id):
     """
     Send candidate data to Astro Colibri.
     """
     candidate = get_object_or_404(Candidate, id=candidate_id)
-    return_url = request.POST.get('return_url', reverse('candidates:list'))
+    return_url = _safe_return_url(request)
     parsed = urlparse(return_url)
     return_url = urlunparse(parsed._replace(fragment=f"candidate-{candidate_id}"))
     try:
@@ -905,12 +933,13 @@ def send_astro_colibri_view(request, candidate_id):
     return redirect(return_url)
 
 
+@login_required
 def astro_colibri_report(request, candidate_id):
     """
     View for displaying Astro-COLIBRI report details and manually sending the report.
     """
     candidate = get_object_or_404(Candidate, id=candidate_id)
-    return_url = request.POST.get('return_url', reverse('candidates:list'))
+    return_url = _safe_return_url(request)
     parsed = urlparse(return_url)
     return_url = urlunparse(parsed._replace(fragment=f"candidate-{candidate_id}"))
 

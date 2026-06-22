@@ -43,9 +43,13 @@ class Candidate(models.Model):
     )
     marked_for_followup = models.BooleanField(default=False)  # Marked for follow-up observations
 
-    def save(self, check_tns=True, *args, **kwargs):
+    def save(self, check_tns=False, *args, **kwargs):
         """
         Override the save method to generate the SDSS-style name using astropy.
+
+        ``check_tns`` defaults to False so routine saves (real/bogus, follow-up, etc.)
+        never trigger blocking TNS network calls. Pass ``check_tns=True`` only on the
+        initial ingest, where resolving the TNS name is intended.
         """
         self.name = self.generate_LAST_name()
         if check_tns and settings.TNS_API_LOOKUPS_ENABLED:

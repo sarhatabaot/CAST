@@ -123,8 +123,8 @@ def get_atlas_fp(candidate, days_ago=10):
         while not task_url:
             with requests.Session() as s:
                 resp = s.post(f"{ATLAS_BASEURL}/queue/", headers=headers,
-                              data={'ra': {str(candidate.ra)}, 'dec': {str(candidate.dec)},
-                                    'mjd_min': {Time(now()).mjd-days_ago}, 'send_email': False})
+                              data={'ra': str(candidate.ra), 'dec': str(candidate.dec),
+                                    'mjd_min': Time(now()).mjd - days_ago, 'send_email': False})
 
                 if resp.status_code == 201:  # successfully queued
                     task_url = resp.json()['url']

@@ -97,11 +97,14 @@ def handle_candidate_identity(payload, file, lasair_enabled: bool = None):
         return existing_candidate, False
 
     # ---- New candidate path ----
-    candidate = Candidate.objects.create(
+    # Resolve the TNS name on initial ingest (honors settings.TNS_API_LOOKUPS_ENABLED);
+    # routine saves elsewhere keep the safe check_tns=False default.
+    candidate = Candidate(
         ra=ra,
         dec=dec,
         discovery_datetime=discovery_datetime,
     )
+    candidate.save(check_tns=True)
 
     save_alert(candidate, discovery_datetime, file.name, last_report)
 
