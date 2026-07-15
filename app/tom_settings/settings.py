@@ -135,6 +135,11 @@ DATABASES = {
     }
 }
 
+# SQLite: wait up to 20s for a write lock (vs the 5s default) before erroring; the
+# per-connection PRAGMAs in candidates/models/signals.py enable WAL and further tuning.
+if DATABASES["default"]["ENGINE"].endswith("sqlite3"):
+    DATABASES["default"].setdefault("OPTIONS", {})["timeout"] = 20
+
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 
 # Password validation

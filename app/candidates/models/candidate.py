@@ -43,6 +43,11 @@ class Candidate(models.Model):
     )
     marked_for_followup = models.BooleanField(default=False)  # Marked for follow-up observations
 
+    class Meta:
+        indexes = [
+            models.Index(fields=["discovery_datetime"]),
+        ]
+
     def save(self, check_tns=False, *args, **kwargs):
         """
         Override the save method to generate the SDSS-style name using astropy.

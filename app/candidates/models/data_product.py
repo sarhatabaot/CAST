@@ -24,5 +24,11 @@ class CandidateDataProduct(models.Model):
     # File cleanup on delete is handled centrally by the post_delete signal
     # (candidates/models/signals.py), which covers direct, queryset, and cascade deletes.
 
+    class Meta:
+        indexes = [
+            # Speeds the cutout map: latest product per (candidate, type).
+            models.Index(fields=["candidate", "data_product_type", "-created_at"]),
+        ]
+
     def __str__(self):
         return f"{self.name} (Candidate: {self.candidate.name})"

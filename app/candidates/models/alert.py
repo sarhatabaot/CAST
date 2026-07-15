@@ -19,5 +19,11 @@ class CandidateAlert(models.Model):
     new_cutout_filename = models.CharField(max_length=255, null=True, blank=True)
     diff_cutout_filename = models.CharField(max_length=255, null=True, blank=True)
 
+    class Meta:
+        indexes = [
+            # Speeds the "latest alert per candidate" subqueries on the list page.
+            models.Index(fields=["candidate", "-created_at"]),
+        ]
+
     def __str__(self):
         return self.candidate.name

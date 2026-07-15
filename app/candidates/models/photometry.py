@@ -13,5 +13,11 @@ class CandidatePhotometry(models.Model):
     limit = models.FloatField(null=True, blank=True)  # Magnitude limit (if no detection)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        indexes = [
+            # Speeds per-candidate photometry lookups ordered by time (graph fragment).
+            models.Index(fields=["candidate", "obs_date"]),
+        ]
+
     def __str__(self):
         return f"{self.candidate.name} - {self.obs_date} - {self.filter_band}"
