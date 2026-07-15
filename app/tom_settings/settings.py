@@ -37,6 +37,15 @@ DEBUG = env.bool("DEBUG", default=False)
 # No default: fail loudly rather than silently accepting no valid hosts.
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS")
 
+# Optional URL path prefix for serving behind a reverse proxy at e.g. http://host/cast.
+# The proxy MUST strip the prefix before forwarding to gunicorn, e.g. nginx:
+#     location /cast/ { proxy_pass http://web:8000/; }
+# Empty (the default) serves the app at the root.
+URL_PREFIX = env.str("URL_PREFIX", default="").rstrip("/")
+FORCE_SCRIPT_NAME = URL_PREFIX or None
+SESSION_COOKIE_PATH = f"{URL_PREFIX}/"
+CSRF_COOKIE_PATH = f"{URL_PREFIX}/"
+
 
 # Application definition
 
@@ -162,8 +171,8 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-LOGIN_URL = '/accounts/login/'
-LOGIN_REDIRECT_URL = '/'
+LOGIN_URL = f'{URL_PREFIX}/accounts/login/'
+LOGIN_REDIRECT_URL = f'{URL_PREFIX}/'
 LOGOUT_REDIRECT_URL = '/'
 
 AUTHENTICATION_BACKENDS = (
@@ -191,11 +200,11 @@ DATE_FORMAT = 'Y-m-d'
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/2.1/howto/static-files/
 
-STATIC_URL = '/static/'
+STATIC_URL = f'{URL_PREFIX}/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, '_static')
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 MEDIA_ROOT = os.path.join(BASE_DIR, 'data')
-MEDIA_URL = '/data/'
+MEDIA_URL = f'{URL_PREFIX}/data/'
 
 LOGGING = {
     'version': 1,
@@ -474,6 +483,9 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 WHITENOISE_USE_FINDERS = True
 # Dev-only: re-stat files on every request. Off in production (static is collected).
 WHITENOISE_AUTOREFRESH = env.bool("WHITENOISE_AUTOREFRESH", default=False)
+# The reverse proxy strips URL_PREFIX before forwarding, so WhiteNoise matches the
+# un-prefixed static path (STATIC_URL carries the prefix only for generated links).
+WHITENOISE_STATIC_PREFIX = '/static/'
 
 
 # CAST Candidates Configuration

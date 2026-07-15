@@ -31,6 +31,7 @@ urlpatterns = [
 # only wires media serving when DEBUG=True (Django's static() helper returns [] with
 # DEBUG=False), which would otherwise 404 every cutout under gunicorn.
 urlpatterns += [
-    re_path(r'^%s(?P<path>.*)$' % settings.MEDIA_URL.lstrip('/'), serve,
-            {'document_root': settings.MEDIA_ROOT}),
+    # Fixed 'data/' (not MEDIA_URL): the proxy strips URL_PREFIX, so URL resolution
+    # sees the un-prefixed path even when MEDIA_URL carries the prefix for links.
+    re_path(r'^data/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
 ]
