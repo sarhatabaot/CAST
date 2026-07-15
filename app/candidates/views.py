@@ -21,6 +21,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.safestring import mark_safe
+from django.utils.html import format_html
 from django.contrib.sites.shortcuts import get_current_site
 from django_comments.models import Comment
 from tom_targets.models import Target
@@ -758,7 +759,7 @@ def send_tns_report_view(request, candidate_id):
         # Add a success message with the candidate name being a link to the candidate detail page
         messages.success(
             request,
-            mark_safe(f"TNS report successfully sent for <a href='/candidates/{candidate.pk}/'>{candidate.name}</a>.")
+            format_html("TNS report successfully sent for <a href='/candidates/{}/'>{}</a>.", candidate.pk, candidate.name)
         )
 
     except Exception:
@@ -827,6 +828,7 @@ def update_cutouts_view(request, candidate_id):
     return redirect(f"{reverse('candidates:list')}?filter={filter_value}")
 
 
+@login_required
 def candidate_detail(request, candidate_id):
     request_params = extract_params_from_request(request)
     candidate = get_object_or_404(Candidate, id=candidate_id)
@@ -861,6 +863,7 @@ def candidate_detail(request, candidate_id):
     return render(request, 'candidates/candidate_detail.html', context)
 
 
+@login_required
 def candidate_comments_view(request, candidate_id):
     candidate = get_object_or_404(Candidate, id=candidate_id)
     next_url = request.POST.get("next") or request.GET.get("next") or reverse(
@@ -916,6 +919,7 @@ def render_candidate_comments_response(request, candidate, *, next_url=None, com
     )
 
 
+@login_required
 def horizons_view(request, candidate_id):
     candidate = get_object_or_404(Candidate, id=candidate_id)
     return_url = _safe_return_url(request)

@@ -1,6 +1,8 @@
 import os
+import re
 import time
 
+from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django.http import Http404
 from django.conf import settings
@@ -24,9 +26,12 @@ def _current_observing_night():
     return now.strftime('%Y-%m-%d')
 
 
+@login_required
 def observed_fields_plot_view(request, night=None):
     # Allow ?night=YYYY-MM-DD to override the path variable
     night = request.GET.get('night') or night
+    if night is not None and not re.fullmatch(r'\d{4}-\d{2}-\d{2}', str(night)):
+        raise Http404("Invalid night format (expected YYYY-MM-DD).")
     current_night = _current_observing_night()
     if night is None:
         night = current_night
