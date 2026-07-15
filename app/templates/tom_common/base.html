@@ -17,7 +17,10 @@
     <link rel="stylesheet" href="{% static 'tom_common/css/custom.css' %}">
     {% block additional_css %}
     {% endblock %}
-    <link rel="icon" type="image/x-icon" href="{% static 'tom_common/img/favicon-32.ico' %}" sizes="32x32" />
+    <link rel="icon" href="{% static 'favicon/favicon.ico' %}" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="{% static 'favicon/favicon-32.png' %}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{% static 'favicon/favicon-16.png' %}">
+    <link rel="apple-touch-icon" href="{% static 'favicon/apple-touch-icon.png' %}">
 
     {% bootstrap_javascript jquery='True' %}
     <!-- htmx.min.js was downloaded manually and added to the project. see https://htmx.org/docs/#download-a-copy -->
