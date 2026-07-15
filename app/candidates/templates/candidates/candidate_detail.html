@@ -6,7 +6,7 @@ container-fluid px-3
 
 {% block title %}Candidate {{ candidate.name }}{% endblock %}
 {% block content %}
-<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script src="{% static 'vendor/plotly-3.3.0.min.js' %}"></script>
 <div class="container mt-4">
     <h1>Candidate: {{ candidate.name }}</h1>
     <hr>

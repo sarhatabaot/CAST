@@ -1,8 +1,9 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}Search Results{% endblock %}
 {% block content %}
 
-<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script src="{% static 'vendor/plotly-3.3.0.min.js' %}"></script>
 <div class="container mt-4">
 <h1>Horizon results for {{ candidate_name }}</h1>
 
