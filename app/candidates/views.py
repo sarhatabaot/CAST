@@ -759,7 +759,11 @@ def send_tns_report_view(request, candidate_id):
         # Add a success message with the candidate name being a link to the candidate detail page
         messages.success(
             request,
-            format_html("TNS report successfully sent for <a href='/candidates/{}/'>{}</a>.", candidate.pk, candidate.name)
+            format_html(
+                "TNS report successfully sent for <a href='{}'>{}</a>.",
+                reverse('candidates:candidate_detail', args=[candidate.pk]),
+                candidate.name,
+            )
         )
 
     except Exception:
