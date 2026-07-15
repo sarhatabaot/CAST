@@ -13,7 +13,6 @@ https://docs.djangoproject.com/en/2.1/ref/settings/
 import logging.config
 import os
 import tempfile
-from email.policy import default
 from pathlib import Path
 from environ import Env, FileAwareEnv
 
@@ -28,12 +27,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = env.str("SECRET_KEY", default="insecure-key-django")
+# No default: startup fails loudly if SECRET_KEY is missing rather than booting with
+# a known, predictable key.
+SECRET_KEY = env.str("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env.bool("DEBUG", default=False)
 
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[""])
+# No default: fail loudly rather than silently accepting no valid hosts.
+ALLOWED_HOSTS = env.list("ALLOWED_HOSTS")
 
 
 # Application definition
@@ -198,17 +200,29 @@ MEDIA_URL = '/data/'
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{asctime} {levelname} {name}: {message}',
+            'style': '{',
+        },
+    },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
-        }
+            'formatter': 'verbose',
+        },
     },
     'loggers': {
         '': {
             'handlers': ['console'],
-            'level': 'INFO'
-        }
-    }
+            'level': env.str('LOG_LEVEL', default='INFO'),
+        },
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+    },
 }
 
 # Caching
@@ -457,7 +471,8 @@ LAST_SKY_FIELDS_PKL_PATH = env.str('LAST_SKY_FIELDS_PKL_PATH', default='last/LAS
 # WhiteNoise static file serving configuration for ASGI
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 WHITENOISE_USE_FINDERS = True
-WHITENOISE_AUTOREFRESH = True
+# Dev-only: re-stat files on every request. Off in production (static is collected).
+WHITENOISE_AUTOREFRESH = env.bool("WHITENOISE_AUTOREFRESH", default=False)
 
 
 # CAST Candidates Configuration
