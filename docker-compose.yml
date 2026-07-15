@@ -74,9 +74,17 @@ services:
       retries: 5
       start_period: 10s
     labels:
+      # Sequence: download the public TNS catalog (06:30) -> ingest candidates (07:00)
+      # -> match candidates against the freshly downloaded catalog (07:30).
+      ofelia.job-exec.tns-download.schedule: "0 30 6 * * *"
+      ofelia.job-exec.tns-download.container: "cast-web"
+      ofelia.job-exec.tns-download.command: "uv run manage.py download_tns_public_objects"
       ofelia.job-exec.ingest.schedule: "0 0 7 * * *"
       ofelia.job-exec.ingest.container: "cast-web"
       ofelia.job-exec.ingest.command: "uv run manage.py ingest_candidates --cutoff 1"
+      ofelia.job-exec.tns-match.schedule: "0 30 7 * * *"
+      ofelia.job-exec.tns-match.container: "cast-web"
+      ofelia.job-exec.tns-match.command: "uv run manage.py match_candidates_to_tns"
 
   redis:
     image: redis:8.4
