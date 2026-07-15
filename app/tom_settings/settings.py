@@ -108,6 +108,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'candidates.context_processors.cast_version',
             ],
         },
     },
@@ -455,6 +456,10 @@ WHITENOISE_AUTOREFRESH = True
 
 
 # CAST Candidates Configuration
+# Application version. CalVer scheme "YYYY.MM.DD-N" (build date + same-day build
+# number), set per deploy via the CAST_VERSION env var; falls back to "dev".
+CAST_VERSION = env.str('CAST_VERSION', default='dev')
+
 CAST_CANDIDATES = {
     # Search and Processing Parameters
     'cone_search_radius_arcsec': env.int('CONE_SEARCH_RADIUS_ARCSEC', default=3),
