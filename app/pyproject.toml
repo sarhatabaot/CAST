@@ -26,7 +26,6 @@ dependencies = [
     "pydantic",
     "whitenoise>=6.0.0",
     "tom-alertstreams",
-    "whitenoise>=6.0.0",
     "clickhouse_connect",
     "gunicorn>=26.0.0",
 ]
