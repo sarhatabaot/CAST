@@ -1,7 +1,13 @@
-{% if item.graph %}
-    <div style="width: 700px; height: 400px;">
-        {{ item.graph|safe }}
-    </div>
-{% else %}
-    No photometry available.
-{% endif %}
+{% comment %}
+Lazy placeholder: the plot is fetched via HTMX after the list has painted,
+keeping the initial page fast. Swapped out for the real graph fragment.
+{% endcomment %}
+<div hx-get="{% url 'candidates:candidate_photometry' item.candidate.id %}"
+     hx-trigger="revealed"
+     hx-swap="outerHTML"
+     style="width: 700px; height: 400px; display: flex; align-items: center; justify-content: center;">
+    <span class="text-muted">
+        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+        Loading photometry…
+    </span>
+</div>

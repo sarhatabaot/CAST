@@ -378,7 +378,6 @@ def build_candidate_status_item(candidate):
     return {
         "candidate": candidate,
         "target": check_target_exists_for_candidate(candidate.id),
-        "graph": generate_photometry_graph(candidate),
         "cutouts": [
             CandidateDataProduct.objects
             .filter(candidate=candidate, data_product_type=cutout_type)
@@ -494,7 +493,6 @@ def candidate_list_view(request):
         {
             "candidate": candidate,
             "target": target_map.get(candidate.id),
-            "graph": generate_photometry_graph(candidate),
             "cutouts": cutout_map.get(candidate.id, []),
             "last_alert": {
                 "score": candidate.latest_alert_score,
@@ -531,6 +529,24 @@ def candidate_list_view(request):
     }
 
     return render(request, 'candidates/list.html', context)
+
+
+@login_required
+def candidate_photometry_fragment(request, candidate_id):
+    """
+    Lazy-loaded photometry graph for a single candidate row.
+
+    The list page renders a lightweight placeholder per row that fetches this
+    fragment via HTMX once the row is revealed, so the initial list render stays
+    fast instead of building ~25 Plotly figures inline on the first request.
+    """
+    candidate = get_object_or_404(Candidate, id=candidate_id)
+    graph = generate_photometry_graph(candidate)
+    return render(
+        request,
+        "candidates/partials/_candidate_photometry_graph.html",
+        {"graph": graph},
+    )
 
 
 @login_required

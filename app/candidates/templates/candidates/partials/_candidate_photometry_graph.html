@@ -1,0 +1,7 @@
+{% if graph %}
+    <div style="width: 700px; height: 400px;">
+        {{ graph|safe }}
+    </div>
+{% else %}
+    No photometry available.
+{% endif %}
