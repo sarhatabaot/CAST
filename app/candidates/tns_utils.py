@@ -221,7 +221,7 @@ def send_json_tns_report(report: Dict) -> requests.Response:
     config = get_tns_config()
     json_url = config['url_api'] + "/set/bulk-report"
     json_data = {'api_key': config['api_key'], 'data': json.dumps(report, indent=4)}
-    response = requests.post(json_url, headers=config['headers'], data=json_data)
+    response = requests.post(json_url, headers=config['headers'], data=json_data, timeout=30)
     return response
 
 

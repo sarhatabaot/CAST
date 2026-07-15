@@ -21,7 +21,7 @@ auth = requests.auth.HTTPBasicAuth(
 def send_astro_colibri(data):
     logger.info("Sending candidate {} to Astro-COLIBRI".format(data['source_name']))
     logger.debug(json.dumps(data, indent=4))
-    request = requests.post(api_url + "/add_last_transient", json=data, auth=auth)
+    request = requests.post(api_url + "/add_last_transient", json=data, auth=auth, timeout=30)
     request.raise_for_status()
     logger.info("Sent to Astro-COLIBRI successfully. Response code: {}".format(request.status_code))
     logger.debug(request.json())
