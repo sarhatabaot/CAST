@@ -43,8 +43,8 @@ ALLOWED_HOSTS = env.list("ALLOWED_HOSTS")
 # Empty (the default) serves the app at the root.
 URL_PREFIX = env.str("URL_PREFIX", default="").rstrip("/")
 FORCE_SCRIPT_NAME = URL_PREFIX or None
-SESSION_COOKIE_PATH = f"{URL_PREFIX}/"
-CSRF_COOKIE_PATH = f"{URL_PREFIX}/"
+# Cookies stay at the default path '/' (sent for '/cast/*' too). Scoping them to the
+# prefix is unnecessary and can interfere with the login/CSRF flow behind the proxy.
 
 
 # Application definition
@@ -173,7 +173,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LOGIN_URL = f'{URL_PREFIX}/accounts/login/'
 LOGIN_REDIRECT_URL = f'{URL_PREFIX}/'
-LOGOUT_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = f'{URL_PREFIX}/'
 
 AUTHENTICATION_BACKENDS = (
     'django.contrib.auth.backends.ModelBackend',
