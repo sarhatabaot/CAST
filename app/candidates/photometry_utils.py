@@ -290,11 +290,9 @@ def generate_photometry_graph(candidate):
     # Get the current timezone-aware datetime
     today = now()
 
-    # Get unique telescope and filter_band pairs
+    # Get unique (telescope, filter_band) pairs in a single query (was 1 + N-telescopes).
     telescope_band_pairs = set(
-        (telescope, band)
-        for telescope in photometry.values_list('telescope', flat=True).distinct()
-        for band in photometry.filter(telescope=telescope).values_list('filter_band', flat=True).distinct()
+        photometry.values_list('telescope', 'filter_band').distinct()
     )
 
     # Create the Plotly graph

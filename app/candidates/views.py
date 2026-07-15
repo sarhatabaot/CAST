@@ -12,8 +12,9 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.contenttypes.models import ContentType
 from django.core.paginator import Paginator
+from django.core.cache import cache
 from django.db.models import Q
-from django.db.models import Subquery, OuterRef
+from django.db.models import Subquery, OuterRef, Max, Count
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.loader import render_to_string
@@ -28,7 +29,7 @@ from cast.external_api_status import get_external_api_service_status, is_externa
 from .astro_colibri import prepare_astro_colibri_data, send_astro_colibri
 from .forms import FileUploadForm
 from .ingestion import process_json_file
-from .models import Candidate, CandidateDataProduct, CandidateAlert
+from .models import Candidate, CandidateDataProduct, CandidateAlert, CandidatePhotometry
 from .models.candidate import CLASSIFICATION_CHOICES
 from .photometry_utils import generate_photometry_graph, get_atlas_fp, get_ztf_fp
 from .services.enrichment import update_candidate_cutouts
@@ -312,6 +313,10 @@ def get_datetime_range(params):
 
 CUTOUT_TYPES = ['ps1', 'ref', 'new', 'diff', 'sdss']
 
+# Rendered photometry graphs are cached per candidate, keyed on the data state, so
+# this TTL only bounds cache growth rather than controlling freshness.
+CANDIDATE_GRAPH_CACHE_TTL = 60 * 60 * 24 * 7  # 7 days
+
 
 def build_cutout_map(candidate_ids):
     latest_cutouts = {}
@@ -541,11 +546,26 @@ def candidate_photometry_fragment(request, candidate_id):
     fast instead of building ~25 Plotly figures inline on the first request.
     """
     candidate = get_object_or_404(Candidate, id=candidate_id)
-    graph = generate_photometry_graph(candidate)
+
+    # Cache the rendered graph keyed on the candidate's photometry state (row count +
+    # latest row) and dist_Mpc (which drives the absolute-mag axis). The key changes
+    # whenever the underlying data changes, so entries invalidate themselves; the TTL
+    # just bounds cache growth.
+    stamp = CandidatePhotometry.objects.filter(candidate=candidate).aggregate(
+        n=Count("id"), last=Max("created_at")
+    )
+    version = f"{stamp['n']}:{stamp['last'].timestamp() if stamp['last'] else 0}:{candidate.dist_Mpc}"
+    cache_key = f"cand_photgraph:{candidate_id}:{version}"
+
+    graph = cache.get(cache_key)
+    if graph is None:
+        graph = generate_photometry_graph(candidate) or ""
+        cache.set(cache_key, graph, timeout=CANDIDATE_GRAPH_CACHE_TTL)
+
     return render(
         request,
         "candidates/partials/_candidate_photometry_graph.html",
-        {"graph": graph},
+        {"graph": graph or None},
     )
 
 
