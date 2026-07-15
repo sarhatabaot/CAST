@@ -2,6 +2,8 @@
 
 **CAST** is a Target and Observation Manager (TOM) system designed to manage and follow up on astronomical transient candidates from the Large Array Survey Telescope (LAST; [Ofek et al. 2023]([url](https://ui.adsabs.harvard.edu/abs/2023PASP..135f5001O/abstract))). It builds on the [TOM Toolkit](https://github.com/TOMToolkit/tom_base) and adds custom functionality such as a scanning page for the survey through the **Candidates** app.
 
+> 📦 Migrating an existing (non-docker) CAST deployment onto this dockerized version? See [importing-legacy-cast.md](importing-legacy-cast.md).
+
 ---
 
 ## 🚀 Installation
