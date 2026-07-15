@@ -1,0 +1,28 @@
+{% comment %}
+HTMX-polled forced-photometry result. While pending it re-polls itself every 5s
+(hx-trigger on load delay); once terminal it renders the final content with no
+trigger, which stops the polling. plotly.js is loaded once at page level.
+{% endcomment %}
+{% if pending %}
+<div id="fp-result"
+     hx-get="{% url 'FP:result_fragment' request_id %}"
+     hx-trigger="load delay:5s"
+     hx-swap="outerHTML">
+  <div class="alert alert-info d-flex align-items-center gap-2">
+    <div class="spinner-border spinner-border-sm text-primary me-2" role="status" aria-hidden="true"></div>
+    <strong>&nbsp;Request {{ request_id }} is processing… (auto-refreshing every 5s — you can also come back later and Check this ID)</strong>
+  </div>
+</div>
+{% else %}
+<div id="fp-result">
+  {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+  {% endif %}
+  {% if csv_available %}
+    <a href="{% url 'FP:download_fp_csv' %}" class="btn btn-success mt-3">Download as CSV</a>
+  {% endif %}
+  {% if plot_div %}
+    <div class="mt-4">{{ plot_div|safe }}</div>
+  {% endif %}
+</div>
+{% endif %}

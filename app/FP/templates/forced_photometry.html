@@ -122,42 +122,42 @@
   </form>
 
 
-  <!-- Placeholder for status message -->
+  <!-- Placeholder for status message (submit spinner) -->
   <div id="status-message"></div>
-  
-  <!-- Placeholder for error message -->
+
+  <!-- Immediate validation error from Fetch/Check -->
   {% if error %}
     <div class="alert alert-danger" id="error-message">{{ error }}</div>
   {% endif %}
-  
-  {% if csv_available %}
-  <a href="{% url 'FP:download_fp_csv' %}" class="btn btn-success mt-3">
-    Download as CSV
-  </a>
-  {% endif %}
 
-  <!-- Plot Output -->
-  {% if plot_div %}
-  <script src="{% static 'vendor/plotly-3.3.0.min.js' %}"></script>
+  <!-- Async results: Fetch/Check only establish a request_id; this fragment polls the
+       external service for status + results, so the request never blocks a worker.
+       plotly.js is loaded once here so the swapped-in plot can render immediately. -->
+  {% if request_id %}
+    <script src="{% static 'vendor/plotly-3.3.0.min.js' %}"></script>
+    <div id="fp-result"
+         hx-get="{% url 'FP:result_fragment' request_id %}"
+         hx-trigger="load"
+         hx-swap="outerHTML">
+      <div class="alert alert-info d-flex align-items-center gap-2">
+        <div class="spinner-border spinner-border-sm text-primary me-2" role="status" aria-hidden="true"></div>
+        <strong>&nbsp;Request {{ request_id }} submitted — fetching results…</strong>
+      </div>
+    </div>
   {% endif %}
-  <div id="plot-container" class="mt-4">
-    {{ plot_div|safe }}
-  </div>
 
 </div>
 <script>
   const form = document.querySelector('#photometry-form');
   const statusDiv = document.querySelector('#status-message');
   const errorDiv = document.querySelector('#error-message');
-  const plotContainer = document.querySelector('#plot-container');
 
   form.addEventListener('submit', function () {
     statusDiv.innerHTML = `
       <div class="alert alert-info d-flex align-items-center gap-2">
         <div class="spinner-border spinner-border-sm text-primary me-2" role="status" aria-hidden="true"></div>
-        <strong> &nbsp Fetching LAST data...</strong>
+        <strong> &nbsp Submitting request...</strong>
       </div>`;
-    plotContainer.innerHTML = '';
     if (errorDiv) {
       errorDiv.classList.remove('alert', 'alert-danger');
       errorDiv.innerHTML = '';

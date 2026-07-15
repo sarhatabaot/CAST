@@ -32,24 +32,40 @@ def get_unique_request_id():
     request_id = int(seconds_since_epoch * 1000)  # Convert to milliseconds and ensure it's an integer
     return request_id
 
-def get_last_fp(ra, dec, jd_start, jd_end, 
-                fieldid="''", cropid=0, mountnum=0, camnum=0,
-                max_results=N_MAX_RESULTS, use_existing_ref=True, resub=False,
-                loadnew=False, timeout=30):
+def submit_fp_request(ra, dec, jd_start, jd_end,
+                      fieldid="''", cropid=0, mountnum=0, camnum=0,
+                      max_results=N_MAX_RESULTS, use_existing_ref=True, resub=False,
+                      loadnew=False, client=None):
     """
-    Fetch data from the ClickHouse database based on RA, DEC, and days.
+    Insert a forced-photometry request and return its request_id, without waiting for
+    the external service to finish. Callers poll get_query_status separately.
     """
-    client = connect_to_clickhouse()
-    
+    client = client or connect_to_clickhouse()
     request_id = get_unique_request_id()
-    user_id =  settings.FORCED_PHOTOMETRY_DB['CAST_user_id']
+    user_id = settings.FORCED_PHOTOMETRY_DB['CAST_user_id']
 
-    query = f""" INSERT INTO last.forcedphot_requests 
-    (request_id, user_id, ra, dec, jd_start, jd_end, fieldid, cropid, mountnum, camnum, n_epoch_max, useexistingref, resub, loadnew) 
+    query = f""" INSERT INTO last.forcedphot_requests
+    (request_id, user_id, ra, dec, jd_start, jd_end, fieldid, cropid, mountnum, camnum, n_epoch_max, useexistingref, resub, loadnew)
     VALUES  ( {request_id}, {user_id}, {ra}, {dec}, {jd_start}, {jd_end}, {fieldid}, {cropid}, {mountnum}, {camnum}, {max_results}, {use_existing_ref} , {resub}, {loadnew})
     """
     logger.info("Inserting forcedphot request: %s", query)
     client.query(query)
+    return request_id
+
+
+def get_last_fp(ra, dec, jd_start, jd_end,
+                fieldid="''", cropid=0, mountnum=0, camnum=0,
+                max_results=N_MAX_RESULTS, use_existing_ref=True, resub=False,
+                loadnew=False, timeout=30):
+    """
+    Submit a request and block until it completes (or times out), returning
+    (detections, nondetections, fp_results). Kept for non-web callers; the web view
+    submits and polls asynchronously instead of blocking.
+    """
+    client = connect_to_clickhouse()
+    request_id = submit_fp_request(ra, dec, jd_start, jd_end, fieldid, cropid, mountnum,
+                                   camnum, max_results, use_existing_ref, resub, loadnew,
+                                   client=client)
 
     timeout_time = time.time() + timeout
     retry_delay = 5  # seconds

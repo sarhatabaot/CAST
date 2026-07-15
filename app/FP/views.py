@@ -9,35 +9,21 @@ from django.shortcuts import render
 from django.http import HttpResponse
 
 # Local imports
-from .utils import get_last_fp, get_results_from_request_id, get_query_status
+from .utils import submit_fp_request, get_results_from_request_id, get_query_status
+
 
 def force_photometry_view(request):
+    """
+    Render the forced-photometry form. Fetch/Check only *establish* a request_id; the
+    results are loaded asynchronously by fp_result_fragment (HTMX polling), so the
+    request never blocks a worker waiting on the external service.
+    """
     context = {}
 
     if request.method == 'POST':
-
+        action = request.POST.get('action')
         try:
-
-            action = request.POST.get('action')
-
-            if action == 'check':
-                request_id = request.POST.get('requestid')
-                status = get_query_status(request_id)
-                if status is None:
-                    context['error'] = f'No such request ID: {request_id}'
-                    return render(request, 'forced_photometry.html', context)
-                if status == 0:  # Pending
-                    context['error'] = f'Request {request_id} is still processing.'
-                    return render(request, 'forced_photometry.html', context)
-                elif status == 1:  # OK
-                    detections, nondetections, fp_results = get_results_from_request_id(request_id)
-                elif status == 2:  # Failed
-                    fp_results = None
-                elif status == 10:  # Failed
-                    raise RuntimeError("Error processing query. Data might be missing, try with different parameters.")
-                
-
-            elif action == 'fetch':
+            if action == 'fetch':
                 ra = float(request.POST.get('ra'))
                 dec = float(request.POST.get('dec'))
                 fieldid = request.POST.get('fieldid')
@@ -51,7 +37,6 @@ def force_photometry_view(request):
                 loadnew = 'loadnew' in request.POST
                 start_date_str = request.POST.get('start_date')
                 end_date_str = request.POST.get('end_date')
-                timeout = int(request.POST.get('timeout', 30))
 
                 if start_date_str and end_date_str:
                     jd_start = Time(start_date_str, format='iso').jd
@@ -63,60 +48,80 @@ def force_photometry_view(request):
                     jd_end = Time.now().jd
                     jd_start = jd_end - int(days)
 
-                try:
-                    fieldid = fieldid if fieldid else "''"
-                    cropid = int(cropid) if cropid else 0
-                    mountnum = int(mountnum) if mountnum else 0
-                    camnum = int(camnum) if camnum else 0
-                    detections, nondetections, fp_results = get_last_fp(ra, dec, jd_start, jd_end, 
-                                                                        fieldid, cropid, mountnum, camnum,
-                                                                        max_results, use_existing_ref, resub,
-                                                                        loadnew, timeout)
-                except Exception as e:
-                    context['error'] = e
-                    return render(request, 'forced_photometry.html', context)
+                fieldid = fieldid if fieldid else "''"
+                cropid = int(cropid) if cropid else 0
+                mountnum = int(mountnum) if mountnum else 0
+                camnum = int(camnum) if camnum else 0
 
-            if fp_results is None:
-                context['error'] = "No data returned for the given RA, DEC, and days."
-                return render(request, 'forced_photometry.html', context)
-            
-            # Save the results in the context for rendering
-            request.session['fp_results'] = fp_results.to_dict(orient='records')  # store as JSON-serializable
-            context['csv_available'] = True
+                request_id = submit_fp_request(
+                    ra, dec, jd_start, jd_end,
+                    fieldid, cropid, mountnum, camnum,
+                    max_results, use_existing_ref, resub, loadnew,
+                )
+                context['request_id'] = request_id
 
-            # non detection - use limmag for lim
-            fig = go.Figure()
-            jd_now = Time.now().jd
-            det_trace = go.Scatter(x=jd_now - detections['jd'], y=detections['mag_psf'],
-                       mode='markers', name='Detections',
-                       error_y=dict(
-                        type='data',
-                        array= 1.0857 / detections['sn'],
-                        visible=True
-                        ))
-            nondet_trace = go.Scatter(
-            x=jd_now - nondetections['jd'], y=nondetections['limmag'],
-            mode='markers', name="Non-detections",
-            marker=dict(symbol='triangle-down', size=8),
-            yaxis="y"
-            )
-            if action == 'fetch':
-                plot_title = f'LAST photometry from ra={ra}, dec={dec}'
-            else:   
-                plot_title = f'LAST photometry from request_id={request_id}'
-            layout = go.Layout(title=plot_title,
-                       xaxis=dict(title='Days ago', autorange='reversed'),
-                       yaxis=dict(title='Apparent Magnitude', autorange="reversed"))
-
-            fig = go.Figure(data=[det_trace, nondet_trace], layout=layout)
-            # Don't embed the ~3 MB plotly.js in every result; the template loads the
-            # self-hosted copy instead.
-            plot_div = opy.plot(fig, auto_open=False, output_type='div', include_plotlyjs=False)
-            context['plot_div'] = plot_div
+            elif action == 'check':
+                requestid = request.POST.get('requestid')
+                if requestid:
+                    context['request_id'] = int(requestid)
         except Exception as e:
             context['error'] = f"Error: {e}"
 
     return render(request, 'forced_photometry.html', context)
+
+
+def fp_result_fragment(request, request_id):
+    """
+    HTMX-polled fragment: report a forced-photometry request's status and, once ready,
+    render its light curve. While pending it returns a self-repolling fragment; when
+    terminal it returns the final content (which stops the polling).
+    """
+    context = {'request_id': request_id}
+    try:
+        status = get_query_status(request_id)
+        if status is None:
+            context['error'] = f'No such request ID: {request_id}'
+        elif status == 1:  # OK
+            detections, nondetections, fp_results = get_results_from_request_id(request_id)
+            if fp_results is None:
+                context['error'] = "No data returned for the given parameters."
+            else:
+                request.session['fp_results'] = fp_results.to_dict(orient='records')
+                context['csv_available'] = True
+                context['plot_div'] = _build_fp_plot_div(detections, nondetections, request_id)
+        elif status == 2:  # Failed / no results
+            context['error'] = "No data returned for the given parameters."
+        elif status == 10:  # Error
+            context['error'] = "Error processing query. Data might be missing, try with different parameters."
+        else:  # 0 = pending (or any not-yet-terminal status)
+            context['pending'] = True
+    except Exception as e:
+        context['error'] = f"Error: {e}"
+
+    return render(request, 'FP/_fp_result.html', context)
+
+
+def _build_fp_plot_div(detections, nondetections, request_id):
+    jd_now = Time.now().jd
+    det_trace = go.Scatter(
+        x=jd_now - detections['jd'], y=detections['mag_psf'],
+        mode='markers', name='Detections',
+        error_y=dict(type='data', array=1.0857 / detections['sn'], visible=True),
+    )
+    nondet_trace = go.Scatter(
+        x=jd_now - nondetections['jd'], y=nondetections['limmag'],
+        mode='markers', name='Non-detections',
+        marker=dict(symbol='triangle-down', size=8), yaxis='y',
+    )
+    layout = go.Layout(
+        title=f'LAST photometry from request_id={request_id}',
+        xaxis=dict(title='Days ago', autorange='reversed'),
+        yaxis=dict(title='Apparent Magnitude', autorange='reversed'),
+    )
+    fig = go.Figure(data=[det_trace, nondet_trace], layout=layout)
+    # plotly.js is loaded once at page level (forced_photometry.html); don't re-embed it.
+    return opy.plot(fig, auto_open=False, output_type='div', include_plotlyjs=False)
+
 
 def download_fp_csv(request):
     data = request.session.get('fp_results')
