@@ -18,7 +18,8 @@ services:
   web:
     build: ./app
     container_name: cast-web
-    command: uv run gunicorn tom_settings.wsgi:application -b 0.0.0.0:8000 -w 4 --timeout 120 --access-logfile - --error-logfile -
+    restart: unless-stopped
+    command: uv run gunicorn tom_settings.wsgi:application -b 0.0.0.0:8000 --worker-class gthread -w 8 --threads 8 --timeout 120 --graceful-timeout 30 --access-logfile - --error-logfile -
     volumes:
       - ./app/:/app/
       - ./data:/data
@@ -56,6 +57,7 @@ services:
   scheduler:
     image: mcuadros/ofelia:latest
     container_name: cast-scheduler
+    restart: unless-stopped
     depends_on:
       web:
         condition: service_healthy
@@ -78,6 +80,7 @@ services:
 
   redis:
     image: redis:8.4
+    restart: unless-stopped
     command: >
       redis-server
       --save ""
