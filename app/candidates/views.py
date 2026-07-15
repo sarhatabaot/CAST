@@ -131,9 +131,9 @@ def upload_file_view(request):
                     messages.warning(request, "Candidate already exists.")
                 else:
                     messages.success(request, f"Successfully processed {candidate_count} candidates.")
-            except Exception as e:
-                # Handle any errors during file processing
-                messages.error(request, f"Error processing file: {e}")
+            except Exception:
+                logger.exception("Error processing uploaded file")
+                messages.error(request, "Error processing file. Please check the file and try again.")
 
             # Redirect to the candidate list view
             return redirect('candidates:list')
@@ -183,8 +183,9 @@ def refresh_atlas_view(request, candidate_id):
         daysago = request.POST.get('daysago')
         get_atlas_fp(candidate, int(daysago))
         messages.success(request, f"Atlas photometry was updated for {candidate.name}.")
-    except Exception as e:
-        messages.error(request, f"Failed to refresh Atlas for {candidate.name}: {e}")
+    except Exception:
+        logger.exception("Failed to refresh Atlas for candidate %s", candidate.id)
+        messages.error(request, f"Failed to refresh Atlas for {candidate.name}.")
 
     # Add anchor for the specific candidate
     if candidate_id:
@@ -206,8 +207,9 @@ def set_reported_by_last_view(request, candidate_id):
     try:
         set_reported_by_LAST(candidate_id)
         messages.success(request, f"Candidate {candidate.name} has been set as reported by LAST.")
-    except Exception as e:
-        messages.error(request, f"Failed to set reported_by_LAST for {candidate.name}: {e}")
+    except Exception:
+        logger.exception("Failed to set reported_by_LAST for candidate %s", candidate.id)
+        messages.error(request, f"Failed to set reported_by_LAST for {candidate.name}.")
 
     # Add anchor for the specific candidate
     if candidate_id:
@@ -233,8 +235,9 @@ def refresh_ztf_view(request, candidate_id):
         daysago = request.POST.get('daysago')
         get_ztf_fp(candidate, int(daysago))
         messages.success(request, f"ZTF photometry was updated for {candidate.name}.")
-    except Exception as e:
-        messages.error(request, f"Failed to refresh ZTF for {candidate.name}: {e}")
+    except Exception:
+        logger.exception("Failed to refresh ZTF for candidate %s", candidate.id)
+        messages.error(request, f"Failed to refresh ZTF for {candidate.name}.")
 
     # Add anchor for the specific candidate
     if candidate_id:
@@ -581,8 +584,9 @@ def add_target_view(request):
         try:
             target = add_candidate_as_target(candidate_id)
             messages.success(request, f"Candidate added as target: {target.name}")
-        except Exception as e:
-            messages.error(request, f"Failed to add target: {str(e)}")
+        except Exception:
+            logger.exception("Failed to add candidate %s as target", candidate_id)
+            messages.error(request, "Failed to add target.")
 
         # Append anchor to scroll back to the candidate
         if candidate_id:
@@ -757,8 +761,9 @@ def send_tns_report_view(request, candidate_id):
             mark_safe(f"TNS report successfully sent for <a href='/candidates/{candidate.pk}/'>{candidate.name}</a>.")
         )
 
-    except Exception as e:
-        messages.error(request, f"Failed to send TNS report for {candidate.name}: {e}")
+    except Exception:
+        logger.exception("Failed to send TNS report for candidate %s", candidate.id)
+        messages.error(request, f"Failed to send TNS report for {candidate.name}.")
 
     parsed = urlparse(return_url)
     return_url = urlunparse(parsed._replace(fragment=f"candidate-{candidate_id}"))
@@ -814,8 +819,9 @@ def update_cutouts_view(request, candidate_id):
         # Example: Assume a function `send_tns_report(candidate)` sends the report
         update_candidate_cutouts(candidate)
         messages.success(request, f"cutouts have been updated for {candidate.name}.")
-    except Exception as e:
-        messages.error(request, f"Failed to update cutouts for {candidate.name}: {e}")
+    except Exception:
+        logger.exception("Failed to update cutouts for candidate %s", candidate.id)
+        messages.error(request, f"Failed to update cutouts for {candidate.name}.")
 
     # Redirect back to the filtered candidate list
     return redirect(f"{reverse('candidates:list')}?filter={filter_value}")
