@@ -204,24 +204,37 @@ def get_fields_per_date(date_str,mounts=['01', '02', '03', '05', '06', '07', '08
     return summary_df,field_counts
 
 
+_last_sky_fields_cache = None
+
+
+def _load_last_sky_fields():
+    """
+    Load (and cache in-process) the LAST sky-fields catalog with its derived radian
+    columns. The pickle is static, so it's read and processed once and reused across
+    requests. Downstream filtering copies the frame, so the cached one stays clean.
+    """
+    global _last_sky_fields_cache
+    if _last_sky_fields_cache is None:
+        # Use Django's static file system to find the pickle file
+        from django.contrib.staticfiles import finders
+
+        pkl_path = getattr(settings, 'LAST_SKY_FIELDS_PKL_PATH', 'static/last/LAST_sky_fields.pkl')
+        file_path = finders.find(pkl_path)
+        if not file_path:
+            raise FileNotFoundError(f"LAST sky fields pickle file not found at path: {pkl_path}")
+
+        logger.info(f"Loading LAST sky fields from: {file_path}")
+        df = pd.read_pickle(file_path)
+        df['RA_min_rad'] = np.deg2rad(df.RA_min)
+        df['RA_max_rad'] = np.deg2rad(df.RA_max)
+        df['Dec_min_rad'] = np.deg2rad(df.Dec_min)
+        df['Dec_max_rad'] = np.deg2rad(df.Dec_max)
+        _last_sky_fields_cache = df
+    return _last_sky_fields_cache
+
+
 def plot_fields(date_str=datetime.now().strftime('%Y-%m-%d'), colormap=True):
-    # Use Django's static file system to find the pickle file
-    from django.contrib.staticfiles import finders
-
-    # Get the configured path from settings or use default
-    pkl_path = getattr(settings, 'LAST_SKY_FIELDS_PKL_PATH', 'static/last/LAST_sky_fields.pkl')
-
-    # Find the static file
-    file_path = finders.find(pkl_path)
-    if not file_path:
-        raise FileNotFoundError(f"LAST sky fields pickle file not found at path: {pkl_path}")
-
-    logger.info(f"Loading LAST sky fields from: {file_path}")
-    last_fields = pd.read_pickle(file_path)
-    last_fields['RA_min_rad'] = np.deg2rad(last_fields.RA_min)
-    last_fields['RA_max_rad'] = np.deg2rad(last_fields.RA_max)
-    last_fields['Dec_min_rad'] = np.deg2rad(last_fields.Dec_min)
-    last_fields['Dec_max_rad'] = np.deg2rad(last_fields.Dec_max)
+    last_fields = _load_last_sky_fields()
 
     summary_df, field_counts = get_fields_per_date(date_str)
     survey_fields = summary_df  # [summary_df['target'].isna()]
