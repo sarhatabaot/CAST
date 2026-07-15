@@ -21,6 +21,7 @@ services:
     command: uv run python manage.py runserver 0.0.0.0:8000
     volumes:
       - ./app/:/app/
+      - ./data:/data
       - ./app/large_files:/app/large_files
       - static_data:/app/static
       - media_data:/app/data
@@ -30,8 +31,9 @@ services:
     env_file:
       - .env
     depends_on:
-      db:
-        condition: service_healthy
+      # --- Postgres (disabled; using sqlite). Uncomment to switch back. ---
+      # db:
+      #   condition: service_healthy
       redis:
         condition: service_healthy
       migrate:
@@ -89,32 +91,34 @@ services:
       timeout: 3s
       retries: 5
 
-  db:
-    image: postgres:16
-    volumes:
-      - postgres_data:/var/lib/postgresql/data/
-    env_file:
-      - .env
-    environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_DATABASE}
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -h localhost -p 5432 -U ${DB_USER} -d ${DB_DATABASE}" ]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+  # --- Postgres (disabled; using sqlite). Uncomment this whole service to switch back. ---
+  # db:
+  #   image: postgres:16
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data/
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     POSTGRES_USER: ${DB_USER}
+  #     POSTGRES_PASSWORD: ${DB_PASSWORD}
+  #     POSTGRES_DB: ${DB_DATABASE}
+  #   healthcheck:
+  #     test: [ "CMD-SHELL", "pg_isready -h localhost -p 5432 -U ${DB_USER} -d ${DB_DATABASE}" ]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 5
 
   migrate:
     build: ./app
     entrypoint: uv run manage.py migrate
     volumes:
       - ./app/:/app/
+      - ./data:/data
     env_file:
       - .env
-    depends_on:
-      db:
-        condition: service_healthy
+    # depends_on:  # (Postgres disabled; sqlite needs no DB service)
+    #   db:
+    #     condition: service_healthy
     restart: "no"  # Run once and exit
 
   collect-static:
@@ -131,6 +135,6 @@ services:
     restart: "no"
 
 volumes:
-  postgres_data:
+  # postgres_data:  # (Postgres disabled; using sqlite)
   media_data:
   static_data:
