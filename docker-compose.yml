@@ -18,7 +18,7 @@ services:
   web:
     build: ./app
     container_name: cast-web
-    command: uv run python manage.py runserver 0.0.0.0:8000
+    command: uv run gunicorn tom_settings.wsgi:application -b 0.0.0.0:8000 -w 4 --timeout 120 --access-logfile - --error-logfile -
     volumes:
       - ./app/:/app/
       - ./data:/data
