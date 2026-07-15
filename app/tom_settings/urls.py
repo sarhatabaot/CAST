@@ -13,8 +13,10 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-from django.urls import path, include
+from django.conf import settings
+from django.urls import path, include, re_path
 from django.views.generic import TemplateView
+from django.views.static import serve
 
 
 urlpatterns = [
@@ -23,4 +25,12 @@ urlpatterns = [
     path('candidates/', include('candidates.urls')),
     path('LAST/', include('LAST.urls')),
     path('FP/', include('FP.urls')),
+]
+
+# Serve user-uploaded media (cutouts, data products) in production. tom_common.urls
+# only wires media serving when DEBUG=True (Django's static() helper returns [] with
+# DEBUG=False), which would otherwise 404 every cutout under gunicorn.
+urlpatterns += [
+    re_path(r'^%s(?P<path>.*)$' % settings.MEDIA_URL.lstrip('/'), serve,
+            {'document_root': settings.MEDIA_ROOT}),
 ]
