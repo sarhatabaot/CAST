@@ -1,17 +1,21 @@
 # Third-party imports
+import re
+
 import pandas as pd
 import plotly.graph_objs as go
 import plotly.offline as opy
 from astropy.time import Time
 
 # Django imports
+from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django.http import HttpResponse
 
 # Local imports
-from .utils import submit_fp_request, get_results_from_request_id, get_query_status
+from .utils import submit_fp_request, get_results_from_request_id, get_query_status, N_MAX_RESULTS
 
 
+@login_required
 def force_photometry_view(request):
     """
     Render the forced-photometry form. Fetch/Check only *establish* a request_id; the
@@ -48,10 +52,22 @@ def force_photometry_view(request):
                     jd_end = Time.now().jd
                     jd_start = jd_end - int(days)
 
+                # Sanitize the two values that reach the ClickHouse INSERT as-is (the
+                # rest are already float()/int()): reject a non-token fieldid and coerce
+                # max_results to a bounded int, closing the injection vector.
+                if fieldid and not re.fullmatch(r'[A-Za-z0-9_.\-]+', fieldid):
+                    context['error'] = 'Invalid Field ID (letters, digits, ".", "_", "-" only).'
+                    return render(request, 'forced_photometry.html', context)
                 fieldid = fieldid if fieldid else "''"
                 cropid = int(cropid) if cropid else 0
                 mountnum = int(mountnum) if mountnum else 0
                 camnum = int(camnum) if camnum else 0
+                try:
+                    max_results = int(max_results) if max_results else N_MAX_RESULTS
+                except (TypeError, ValueError):
+                    context['error'] = 'Max Results must be a whole number.'
+                    return render(request, 'forced_photometry.html', context)
+                max_results = max(1, min(max_results, N_MAX_RESULTS))
 
                 request_id = submit_fp_request(
                     ra, dec, jd_start, jd_end,
@@ -70,6 +86,7 @@ def force_photometry_view(request):
     return render(request, 'forced_photometry.html', context)
 
 
+@login_required
 def fp_result_fragment(request, request_id):
     """
     HTMX-polled fragment: report a forced-photometry request's status and, once ready,
@@ -123,6 +140,7 @@ def _build_fp_plot_div(detections, nondetections, request_id):
     return opy.plot(fig, auto_open=False, output_type='div', include_plotlyjs=False)
 
 
+@login_required
 def download_fp_csv(request):
     data = request.session.get('fp_results')
     if not data:
