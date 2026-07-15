@@ -1,4 +1,5 @@
 {% extends 'tom_common/base.html' %}
+{% load static %}
 {% block content %}
 <div class="container mt-4">
   <h2>Forced Photometry Tool</h2>
@@ -136,6 +137,9 @@
   {% endif %}
 
   <!-- Plot Output -->
+  {% if plot_div %}
+  <script src="{% static 'vendor/plotly-3.3.0.min.js' %}"></script>
+  {% endif %}
   <div id="plot-container" class="mt-4">
     {{ plot_div|safe }}
   </div>

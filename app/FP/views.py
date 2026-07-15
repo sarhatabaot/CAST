@@ -109,7 +109,9 @@ def force_photometry_view(request):
                        yaxis=dict(title='Apparent Magnitude', autorange="reversed"))
 
             fig = go.Figure(data=[det_trace, nondet_trace], layout=layout)
-            plot_div = opy.plot(fig, auto_open=False, output_type='div')
+            # Don't embed the ~3 MB plotly.js in every result; the template loads the
+            # self-hosted copy instead.
+            plot_div = opy.plot(fig, auto_open=False, output_type='div', include_plotlyjs=False)
             context['plot_div'] = plot_div
         except Exception as e:
             context['error'] = f"Error: {e}"
