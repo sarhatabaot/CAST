@@ -16,6 +16,12 @@ class Command(BaseCommand):
             default=None,
             help='Override User-Agent (must include required tns_marker JSON).',
         )
+        parser.add_argument(
+            "--api-key",
+            type=str,
+            default=None,
+            help="Override TNS api_key (required for a bot tns_marker).",
+        )
         parser.add_argument("--zip-path", type=str, default=None, help="Override output ZIP path.")
         parser.add_argument("--csv-path", type=str, default=None, help="Override extracted CSV path.")
         parser.add_argument(
@@ -30,6 +36,7 @@ class Command(BaseCommand):
             summary = download_tns_public_objects_catalog(
                 url=options["url"],
                 user_agent=options["user_agent"],
+                api_key=options["api_key"],
                 zip_path=options["zip_path"],
                 csv_path=options["csv_path"],
                 timeout_seconds=options["timeout_seconds"],

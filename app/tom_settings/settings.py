@@ -462,6 +462,8 @@ TNS_PUBLIC_OBJECTS = {
         'TNS_PUBLIC_OBJECTS_USER_AGENT',
         default='',
     ),
+    # A *bot* tns_marker download must POST its api_key (TNS docs); reuse the bot's key.
+    'api_key': env.str('TNS_API_KEY', default=''),
     'zip_path': env.str(
         'TNS_PUBLIC_OBJECTS_ZIP_PATH',
         default=str(BASE_DIR / 'large_files' / 'tns' / 'tns_public_objects.csv.zip'),

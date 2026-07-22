@@ -53,12 +53,14 @@ def download_tns_public_objects_catalog(
     *,
     url: str | None = None,
     user_agent: str | None = None,
+    api_key: str | None = None,
     zip_path: str | None = None,
     csv_path: str | None = None,
     timeout_seconds: int = 300,
 ) -> DownloadSummary:
     configured_url = _config_value("url", url)
     configured_user_agent = _config_value("user_agent", user_agent)
+    configured_api_key = _config_value("api_key", api_key)
     configured_zip_path = Path(_config_value("zip_path", zip_path))
     configured_csv_path = Path(_config_value("csv_path", csv_path))
 
@@ -74,11 +76,15 @@ def download_tns_public_objects_catalog(
     temp_csv_path = configured_csv_path.with_name(configured_csv_path.name + ".tmp")
 
     headers = {"User-Agent": configured_user_agent}
+    # TNS gates this file behind a tns_marker. A *bot* marker must POST its api_key;
+    # a *user* marker may omit it. We POST the key whenever one is configured.
+    post_data = {"api_key": configured_api_key} if configured_api_key else None
     bytes_downloaded = 0
 
-    with requests.get(
+    with requests.post(
         configured_url,
         headers=headers,
+        data=post_data,
         stream=True,
         timeout=timeout_seconds,
     ) as response:
