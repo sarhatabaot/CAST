@@ -9,8 +9,11 @@ app but on SQLite in a mounted `data/` dir with media in a `media_data` volume.
 (cutouts). They are a pair — the DB stores *relative* file paths; the media files
 hold the bytes. Bring only the DB and every cutout is a broken link.
 
-> Companion docs: [migration-history reconciliation](#step-2--reconcile-migration-history),
-> [docs/galaxy-association.md](docs/galaxy-association.md), [docs/tns-daily-catalog-download.md](docs/tns-daily-catalog-download.md).
+> **Already have the local `data/db.sqlite3` staged?** Steps 2–3 (migration
+> reconciliation and the SQLite switch) are already baked into this branch, so you can
+> **skip to [§5 Deploy & migrate](#5-deploy--migrate)**. For a *clean* re-run, first
+> restore the file from your pristine snapshot (`cp <snapshot> data/db.sqlite3`) so
+> `migrate` starts from `0027` rather than an already-migrated DB.
 
 ---
 
