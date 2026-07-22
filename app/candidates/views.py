@@ -321,6 +321,11 @@ CUTOUT_TYPES = ['ps1', 'ref', 'new', 'diff', 'sdss']
 # this TTL only bounds cache growth rather than controlling freshness.
 CANDIDATE_GRAPH_CACHE_TTL = 60 * 60 * 24 * 7  # 7 days
 
+# JPL Horizons results are cached per candidate. The inputs (ra/dec/discovery time)
+# are immutable, so the answer is stable; this TTL just lets orbital-solution updates
+# eventually reflow and bounds cache growth.
+HORIZONS_CACHE_TTL = 60 * 60 * 24  # 1 day
+
 
 def build_cutout_map(candidate_ids):
     latest_cutouts = {}
@@ -924,37 +929,55 @@ def render_candidate_comments_response(request, candidate, *, next_url=None, com
 
 
 @login_required
-def horizons_view(request, candidate_id):
+def horizon_results_fragment(request, candidate_id):
+    """
+    Lazy-loaded JPL Horizons results for one candidate, rendered as a modal-body
+    fragment. The list page opens the modal instantly and fetches this via HTMX, so
+    the ~25s JPL round-trip never blocks page navigation.
+
+    Cached per candidate keyed on the immutable inputs (ra/dec/discovery time), so the
+    first open pays the JPL latency once and every open after that is instant.
+    """
     candidate = get_object_or_404(Candidate, id=candidate_id)
-    return_url = _safe_return_url(request)
-    parsed = urlparse(return_url)
-    return_url = urlunparse(parsed._replace(fragment=f"candidate-{candidate_id}"))
-    try:
-        data = get_horizons_data(candidate_id)
-        if data and data['n_second_pass'] > 0:
-            results = [
-                {
-                    "object_name": row[0],
-                    "dist_norm": row[5],
-                    "visual_mag": row[6],
-                    "ra_rate": row[7],
-                    "dec_rate": row[8],
-                }
-                for row in data["data_second_pass"]
-            ]
-            results = sorted(results, key=lambda x: float(x["dist_norm"]))
+
+    cache_key = (
+        f"horizons:{candidate_id}:{candidate.ra}:{candidate.dec}:"
+        f"{candidate.discovery_datetime.isoformat()}"
+    )
+    results = cache.get(cache_key)
+    if results is None:
+        try:
+            data = get_horizons_data(candidate_id)
+        except Exception as e:
+            logger.warning("Horizons lookup failed for candidate %s: %s", candidate_id, e)
+            return render(
+                request,
+                "candidates/partials/_horizon_results.html",
+                {"error": str(e), "candidate_id": candidate_id},
+            )
+        if data and data.get("n_second_pass", 0) > 0:
+            results = sorted(
+                (
+                    {
+                        "object_name": row[0],
+                        "dist_norm": row[5],
+                        "visual_mag": row[6],
+                        "ra_rate": row[7],
+                        "dec_rate": row[8],
+                    }
+                    for row in data["data_second_pass"]
+                ),
+                key=lambda x: float(x["dist_norm"]),
+            )
         else:
             results = []
-    except Exception as e:
-        messages.error(request, f"Failed to get data from Horizons: {e}")
-        return redirect('candidates:list')
+        cache.set(cache_key, results, timeout=HORIZONS_CACHE_TTL)
 
-    context = {
-        'candidate_name': candidate.name,
-        'results': results,
-        'return_url': return_url
-    }
-    return render(request, 'candidates/horizon.html', context)
+    return render(
+        request,
+        "candidates/partials/_horizon_results.html",
+        {"results": results, "candidate_id": candidate_id},
+    )
 
 
 @login_required

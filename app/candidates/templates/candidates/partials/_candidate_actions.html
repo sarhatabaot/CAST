@@ -94,15 +94,21 @@
     {% endif %}
 {% endif %}
 
-<!-- Check horizons -->
-<form method="POST" action="{% url 'candidates:horizon' item.candidate.id %}" style="display:inline;">
-    {% csrf_token %}
-    <input type="hidden" name="candidate_id" value="{{ item.candidate.id }}">
-    <input type="hidden" name="return_url" value="{{ request.get_full_path }}">
-    <button type="submit" class="btn btn-sm btn-secondary text-white">
-        Check Horizons
-    </button>
-</form>
+<!-- Check horizons: opens the shared modal instantly, then HTMX-fetches JPL results
+     into it (see #horizonModal in list.html). hx-sync aborts any in-flight lookup
+     when another candidate is opened, so a slow response can't land in the wrong modal. -->
+<button type="button"
+        class="btn btn-sm btn-secondary text-white"
+        data-toggle="modal" data-target="#horizonModal"
+        hx-get="{% url 'candidates:horizon_results' item.candidate.id %}"
+        hx-target="#horizonBody"
+        hx-swap="innerHTML"
+        hx-indicator="#horizonSpinner"
+        hx-sync="#horizonModal:replace"
+        onclick="document.getElementById('horizonBody').innerHTML='';
+                 document.getElementById('horizonModalTitle').textContent='Horizons — {{ item.candidate.name|escapejs }}';">
+    Check Horizons
+</button>
 
 <!-- Send TNS Report Button -->
 {% if item.candidate.reported_by_LAST %}

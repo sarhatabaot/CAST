@@ -44,5 +44,28 @@ container-fluid px-3
     {% include "candidates/partials/_pagination.html" %}
 </div>
 
+<!-- Shared Horizons modal. One per page; each row's "Check Horizons" button opens it
+     and HTMX-loads that candidate's results into #horizonBody (see _candidate_actions). -->
+<div class="modal fade" id="horizonModal" tabindex="-1" role="dialog"
+     aria-labelledby="horizonModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="horizonModalTitle">Horizons</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="horizonSpinner" class="htmx-indicator text-center py-4">
+                    <span class="spinner-border" role="status" aria-hidden="true"></span>
+                    <div class="mt-2 text-muted">Querying JPL Horizons… this can take ~30s the first time.</div>
+                </div>
+                <div id="horizonBody"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
     <script src="{% static 'candidates/list.js' %}" defer></script>
 {% endblock %}>
