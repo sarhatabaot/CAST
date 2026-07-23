@@ -231,6 +231,13 @@ LOGGING = {
             'level': 'ERROR',
             'propagate': False,
         },
+        # tomtoolkit logs every DRF route registration at INFO on each process boot.
+        # With ingest running every 5 min that startup wall is pure noise; quiet it.
+        'tom_common.api_router': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
     },
 }
 
