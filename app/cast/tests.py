@@ -9,7 +9,14 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from candidates.ingestion import IngestionResult, has_lasair_credentials, process_json_file, process_multiple_json_files
+from candidates.ingestion import (
+    IngestionResult,
+    IngestOutcome,
+    has_lasair_credentials,
+    process_json_file,
+    process_multiple_json_files,
+    scan_json_dir,
+)
 from candidates.models import Candidate
 from candidates.photometry_utils import get_lasair_api_token, get_ztf_fp
 from cast.external_api_status import (
@@ -101,17 +108,17 @@ class IngestionRegressionTests(TestCase):
 
     @patch("candidates.ingestion.process_json_file")
     @patch("candidates.ingestion.has_lasair_credentials")
-    @patch("candidates.ingestion.collect_new_json")
+    @patch("candidates.ingestion.scan_json_dir")
     @patch("candidates.ingestion.get_json_names_from_db")
     def test_process_multiple_json_files_checks_lasair_credentials_once(
         self,
         mock_get_json_names_from_db,
-        mock_collect_new_json,
+        mock_scan_json_dir,
         mock_has_lasair_credentials,
         mock_process_json_file,
     ):
         mock_get_json_names_from_db.return_value = set()
-        mock_collect_new_json.return_value = ["/tmp/a.json", "/tmp/b.json"]
+        mock_scan_json_dir.return_value = (["/tmp/a.json", "/tmp/b.json"], 100.0)
         mock_has_lasair_credentials.return_value = False
         mock_process_json_file.side_effect = [
             (1, IngestionResult.CREATED, "LAST J000000.00+000000.00"),
@@ -119,12 +126,110 @@ class IngestionRegressionTests(TestCase):
         ]
 
         with patch("builtins.open", mock_open(read_data=b"{}")):
-            total = process_multiple_json_files("/tmp/input", cutoff=1)
+            outcome = process_multiple_json_files("/tmp/input", cutoff=1)
 
-        self.assertEqual(total, 1)
+        self.assertEqual(outcome.added, 1)
+        self.assertEqual(outcome.new_watermark, 100.0)
         mock_has_lasair_credentials.assert_called_once_with()
         self.assertEqual(len(mock_process_json_file.call_args_list), 2)
         self.assertTrue(all(args.args[1] is False for args in mock_process_json_file.call_args_list))
+
+
+@override_settings(CACHES={"default": {
+    "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+    "LOCATION": "ingest-safety-tests",
+}})
+class IngestSafetyTests(TestCase):
+    def setUp(self):
+        cache.clear()
+
+    def test_redis_lock_is_exclusive(self):
+        from candidates.services.locking import redis_lock
+
+        with redis_lock("test:lock", 300) as first:
+            self.assertTrue(first)
+            with redis_lock("test:lock", 300) as second:
+                self.assertFalse(second)  # already held -> not acquired
+        # released on exit -> acquirable again
+        with redis_lock("test:lock", 300) as third:
+            self.assertTrue(third)
+
+    def test_command_skips_when_lock_held(self):
+        from django.core.management import call_command
+        from candidates.management.commands.ingest_candidates import INGEST_LOCK_KEY
+
+        cache.add(INGEST_LOCK_KEY, "someone-else", 300)  # simulate a run in progress
+        with patch(
+            "candidates.management.commands.ingest_candidates.process_multiple_json_files"
+        ) as mock_process:
+            call_command("ingest_candidates")
+        mock_process.assert_not_called()  # heavy work skipped while locked
+
+    def test_command_passes_watermark_and_advances_it(self):
+        from django.core.management import call_command
+        from candidates.management.commands.ingest_candidates import INGEST_WATERMARK_KEY
+
+        cache.set(INGEST_WATERMARK_KEY, 100.0, timeout=None)
+        with patch(
+            "candidates.management.commands.ingest_candidates.process_multiple_json_files",
+            return_value=IngestOutcome(added=2, new_watermark=555.0, scanned=3, selected=2),
+        ) as mock_process:
+            call_command("ingest_candidates")
+
+        # the stored watermark is read and passed in as the gate...
+        self.assertEqual(mock_process.call_args.kwargs["min_mtime"], 100.0)
+        self.assertFalse(mock_process.call_args.kwargs["full"])
+        # ...and advanced forward to the newest mtime the run observed
+        self.assertEqual(cache.get(INGEST_WATERMARK_KEY), 555.0)
+
+    def test_command_full_ignores_watermark(self):
+        from django.core.management import call_command
+        from candidates.management.commands.ingest_candidates import INGEST_WATERMARK_KEY
+
+        cache.set(INGEST_WATERMARK_KEY, 100.0, timeout=None)
+        with patch(
+            "candidates.management.commands.ingest_candidates.process_multiple_json_files",
+            return_value=IngestOutcome(added=0, new_watermark=90.0),
+        ) as mock_process:
+            call_command("ingest_candidates", "--full")
+
+        self.assertIsNone(mock_process.call_args.kwargs["min_mtime"])
+        self.assertTrue(mock_process.call_args.kwargs["full"])
+        # watermark is forward-only: an older observed mtime must not regress it
+        self.assertEqual(cache.get(INGEST_WATERMARK_KEY), 100.0)
+
+    def test_scan_json_dir_gates_settle_watermark_cutoff(self):
+        import os
+        import tempfile
+        import time
+
+        now = time.time()
+        with tempfile.TemporaryDirectory() as d:
+            def make(name, mtime):
+                p = os.path.join(d, name)
+                with open(p, "w") as f:
+                    f.write("{}")
+                os.utime(p, (mtime, mtime))
+                return mtime
+
+            m_old = make("old.json", now - 20 * 86400)     # settled but older than cutoff
+            m_a = make("a.json", now - 5 * 86400)           # settled, within cutoff
+            m_b = make("b.json", now - 3600)                # settled, within cutoff, newest
+            make("fresh.json", now - 5)                     # inside settle window -> excluded
+            make("note.txt", now - 3600)                    # not .json -> ignored
+
+            cutoff_ts = now - 10 * 86400
+            settle_ts = now - 60
+
+            # No watermark: a.json + b.json selected; old excluded (cutoff); fresh excluded (settle)
+            files, max_settled = scan_json_dir(d, cutoff_ts, settle_ts, None)
+            self.assertEqual({os.path.basename(f) for f in files}, {"a.json", "b.json"})
+            # max_settled is the newest *settled* file (fresh.json is excluded from it)
+            self.assertAlmostEqual(max_settled, m_b, places=3)
+
+            # Watermark at a.json's mtime gates a.json out, leaving only b.json
+            files2, _ = scan_json_dir(d, cutoff_ts, settle_ts, m_a)
+            self.assertEqual({os.path.basename(f) for f in files2}, {"b.json"})
 
 
 class ExternalApiStatusTests(TestCase):

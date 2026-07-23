@@ -1,9 +1,9 @@
-import glob
 import logging
 import os
+import time
 import traceback
 from collections import Counter
-from datetime import datetime, timedelta
+from dataclasses import dataclass
 from enum import Enum
 
 from django.conf import settings
@@ -153,71 +153,114 @@ def get_json_names_from_db():
         .values_list('name', flat=True)
     )
 
-def set_time_cutoff(cutoff):
-    return datetime.now() - timedelta(days=cutoff)
+
+@dataclass
+class IngestOutcome:
+    """Result of an ingest run, including the watermark to persist for the next run."""
+    added: int = 0
+    new_watermark: float | None = None  # highest mtime observed among settled files
+    scanned: int = 0                    # files that passed the fs gates
+    selected: int = 0                   # of those, the ones not already in the DB
 
 
-def collect_new_json(directory_path, cutoff_time, existing_json_names):
-    """
-    Collect JSON files newer than cutoff_time and not already ingested.
-    Logs exclusion reasons for debugging.
+def scan_json_dir(directory_path, cutoff_ts, settle_ts, min_mtime):
+    """Single-pass filesystem scan of the JSON drop dir. Cheap: one ``os.scandir``, no DB.
+
+    Returns ``(candidate_files, max_settled_mtime)``:
+
+    * ``candidate_files`` — ``*.json`` paths that are *settled* (mtime <= ``settle_ts``,
+      i.e. not being written right now), newer than the cutoff (mtime > ``cutoff_ts``),
+      and — unless ``min_mtime`` is None (a ``--full`` run) — newer than the watermark
+      (mtime > ``min_mtime``). These are NOT yet DB-deduped.
+    * ``max_settled_mtime`` — the highest mtime among *all* settled ``*.json`` entries
+      (not just the selected ones), or None if none were settled. This drives the
+      watermark, so files we've already seen are gated out next run even when they
+      weren't selected (already ingested).
     """
     if not os.path.isdir(directory_path):
         logger.warning(f"Directory does not exist: {directory_path}")
-        return []
+        return [], None
 
-    all_files = glob.glob(os.path.join(directory_path, "*.json"))
-    if not all_files:
-        logger.info(f"No .json files found in {directory_path}")
-        return []
-
-    selected_files = []
-
-    for file in all_files:
-        basename = os.path.basename(file)
-        mtime = datetime.fromtimestamp(os.path.getmtime(file))
-
-        if basename in existing_json_names:
-            logger.debug(f"Skipping {basename}: already ingested")
-            continue
-
-        if mtime <= cutoff_time:
-            logger.debug(
-                f"Skipping {basename}: too old "
-                f"(mtime={mtime}, cutoff={cutoff_time})"
-            )
-            continue
-
-        selected_files.append(file)
+    candidate_files = []
+    max_settled_mtime = None
+    scanned = 0
+    try:
+        with os.scandir(directory_path) as entries:
+            for entry in entries:
+                if not entry.name.endswith(".json"):
+                    continue
+                try:
+                    mtime = entry.stat().st_mtime
+                except OSError:
+                    continue
+                # Skip files still being written (mtime within the settle window).
+                if mtime > settle_ts:
+                    continue
+                scanned += 1
+                if max_settled_mtime is None or mtime > max_settled_mtime:
+                    max_settled_mtime = mtime
+                if mtime <= cutoff_ts:
+                    continue
+                if min_mtime is not None and mtime <= min_mtime:
+                    continue
+                candidate_files.append(entry.path)
+    except OSError as e:
+        logger.warning(f"Failed to scan {directory_path}: {e}")
+        return [], None
 
     logger.info(
-        f"Selected {len(selected_files)} of {len(all_files)} JSON files"
+        f"Scanned {scanned} settled JSON files; {len(candidate_files)} pass the "
+        f"cutoff/watermark gates"
     )
-    return selected_files
+    return candidate_files, max_settled_mtime
 
 
-def process_multiple_json_files(directory_path, cutoff=3, check_tns: bool = True) -> int:
+def process_multiple_json_files(
+    directory_path,
+    cutoff=3,
+    check_tns: bool = True,
+    min_mtime: float | None = None,
+    settle_seconds: int = 60,
+    full: bool = False,
+) -> IngestOutcome:
+    """Ingest new candidate JSON files, cheaply skipping the DB when nothing is new.
+
+    :param directory_path: directory containing the JSON drop files
+    :param cutoff: max age in days of files to consider
+    :param min_mtime: watermark — ignore files at/below this mtime (skipped when ``full``)
+    :param settle_seconds: ignore files modified within this many seconds (torn-write guard)
+    :param full: rescan everything within ``cutoff``, ignoring the watermark
+    :return: an :class:`IngestOutcome` (count added + watermark to persist)
     """
-    Processes new JSON files from the last day that are not already in the database.
-    :param directory_path: Path to the directory containing JSON files
-    :return: The total number of candidates successfully added
-    """
+    now = time.time()
+    cutoff_ts = now - cutoff * 86400
+    settle_ts = now - settle_seconds
+    gate_mtime = None if full else min_mtime
 
-    # Step 1: Get JSON names already in DB
+    # Cheap gate first: a single filesystem pass, no DB work.
+    candidate_files, max_settled = scan_json_dir(
+        directory_path, cutoff_ts, settle_ts, gate_mtime
+    )
+
+    if not candidate_files:
+        logger.info(
+            f"No new settled JSON files in {directory_path} "
+            f"(cutoff={cutoff}d, settle={settle_seconds}s, full={full})"
+        )
+        return IngestOutcome(added=0, new_watermark=max_settled)
+
+    # Only now that there is filesystem work do we pay for the DB name load + dedup.
     existing_json_names = get_json_names_from_db()
-
-    # Step 2: Set time cutoff to 24 hours ago
-    cutoff_time = set_time_cutoff(cutoff)
-
-    # Step 3: Collect new JSON files
-    json_files = collect_new_json(directory_path, cutoff_time, existing_json_names)
+    json_files = [
+        f for f in candidate_files
+        if os.path.basename(f) not in existing_json_names
+    ]
 
     if not json_files:
-        logger.info(
-            f"No new JSON files found in {directory_path} "
-            f"(cutoff={cutoff} days)"
+        logger.info("All scanned files are already ingested; nothing to do.")
+        return IngestOutcome(
+            added=0, new_watermark=max_settled, scanned=len(candidate_files)
         )
-        return 0
 
     logger.info(f"Found {len(json_files)} new files to process.")
     total_candidates_added = 0
@@ -267,7 +310,12 @@ def process_multiple_json_files(directory_path, cutoff=3, check_tns: bool = True
         logger.info(f"  {result.value}: {n}")
 
     logger.info(f"Total candidates added: {total_candidates_added}")
-    return total_candidates_added
+    return IngestOutcome(
+        added=total_candidates_added,
+        new_watermark=max_settled,
+        scanned=len(candidate_files),
+        selected=len(json_files),
+    )
 
 
 def has_lasair_credentials() -> bool:
