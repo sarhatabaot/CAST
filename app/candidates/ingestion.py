@@ -9,9 +9,9 @@ from enum import Enum
 from django.conf import settings
 
 from candidates.models import CandidatePhotometry, CandidateDataProduct
-from candidates.photometry_utils import add_photometry_from_last_report, get_atlas_fp, get_ztf_fp, get_lasair_api_token
+from candidates.photometry_utils import add_photometry_from_last_report, get_lasair_api_token
 from candidates.services.enrichment import add_ToO_names_to_candidate, update_candidate_cutouts, try_add_cutout, \
-    try_forced_photometry, try_associate_host_galaxy
+    try_associate_host_galaxy
 from candidates.services.identity import handle_candidate_identity
 from candidates.services.parsing import parse_json_file, ensure_aware_utc
 from candidates.utils import fetch_ps1_cutout, fetch_sdss_cutout
@@ -123,21 +123,11 @@ def process_json_file(file, lasair_enabled: bool = None) -> tuple[int, Ingestion
     )
 
     # ---- Forced photometry ----
-    try_forced_photometry(candidate, get_atlas_fp, "Atlas")
-
-    # Use cached credential check if provided, otherwise check directly
-    if lasair_enabled is not None:
-        should_do_ztf = lasair_enabled
-    else:
-        should_do_ztf = has_lasair_credentials()
-    
-    if should_do_ztf:
-        try_forced_photometry(candidate, get_ztf_fp, "ZTF")
-    else:
-        logger.info(
-            f"Skipping ZTF forced photometry for candidate {candidate.id}: "
-            "LASAIR credentials not configured"
-        )
+    # Deferred out of ingest: ATLAS/ZTF forced photometry submit-and-poll (and ATLAS
+    # rate-limiting) can take 10-20 min per candidate, which would hold the ingest lock
+    # for the whole backlog. It now runs out-of-band (Django Tasks worker); ingest just
+    # creates the candidate + cutouts so it stays fast. `lasair_enabled` is accepted for
+    # signature compatibility but no longer used here.
 
     # ---- Host galaxy association ----
     try_associate_host_galaxy(candidate)

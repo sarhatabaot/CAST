@@ -65,7 +65,6 @@ class IngestionRegressionTests(TestCase):
         self.assertIsNone(candidate_name)
 
     @patch("candidates.ingestion.try_associate_host_galaxy")
-    @patch("candidates.ingestion.try_forced_photometry")
     @patch("candidates.ingestion.try_add_cutout")
     @patch("candidates.ingestion.update_candidate_cutouts")
     @patch("candidates.ingestion.add_ToO_names_to_candidate")
@@ -78,7 +77,6 @@ class IngestionRegressionTests(TestCase):
         _mock_add_too_names,
         _mock_update_cutouts,
         mock_try_add_cutout,
-        mock_try_forced_photometry,
         mock_try_associate_host_galaxy,
     ):
         candidate = Candidate.objects.create(
@@ -103,7 +101,6 @@ class IngestionRegressionTests(TestCase):
 
         self.assertEqual((count, result, candidate_name), (1, IngestionResult.CREATED, candidate.name))
         self.assertEqual(mock_try_add_cutout.call_count, 2)
-        mock_try_forced_photometry.assert_called_once()
         mock_try_associate_host_galaxy.assert_called_once_with(candidate)
 
     @patch("candidates.ingestion.process_json_file")

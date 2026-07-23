@@ -182,7 +182,7 @@ def get_atlas_fp(candidate, days_ago=10):
                     return None
 
         with requests.Session() as s:
-            textdata = s.get(result_url, headers=headers).text
+            textdata = s.get(result_url, headers=headers, timeout=ATLAS_TIMEOUT).text
 
         dfresult = pd.read_csv(io.StringIO(textdata.replace("###", "")), sep=r"\s+")
 
