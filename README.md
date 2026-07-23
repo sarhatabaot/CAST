@@ -53,8 +53,9 @@ Migrations and static collection run automatically (one-shot `migrate` and `coll
 | Service | Role |
 |---|---|
 | `web` | Django app via gunicorn (port 8000) |
-| `redis` | cache backend |
-| `scheduler` | ofelia cron (TNS download → ingest → TNS match) |
+| `worker` | django-tasks worker (`db_worker`) — drains deferred forced-photometry tasks |
+| `redis` | cache backend + ingest lock/watermark |
+| `scheduler` | ofelia cron (5-min ingest; daily TNS download → full ingest → TNS match) |
 | `migrate` | one-shot — applies DB migrations |
 | `collect-static` | one-shot — `collectstatic` |
 | `download-large-files` | one-shot — fetches catalogs/pickles per the manifest |
@@ -73,7 +74,9 @@ The Postgres `db` service is present but **commented out** (SQLite is the defaul
 - `DB_ENGINE=django.db.backends.sqlite3`, `DB_DATABASE=/data/db.sqlite3` (the file lives in the mounted `./data` dir; WAL mode is enabled automatically).
 - To use **Postgres** instead: set `DB_ENGINE=…postgresql` + `DB_USER/PASSWORD/DATABASE/HOST/PORT`, and uncomment the `db` service, its two `depends_on` references, and the `postgres_data` volume in `docker-compose.yml`.
 
-**Cache** — `CACHE_BACKEND=django.core.cache.backends.redis.RedisCache`, `CACHE_LOCATION=redis://:<REDIS_PASSWORD>@redis:6379/0`, and `REDIS_PASSWORD` (must match `CACHE_LOCATION`).
+**Cache** — `CACHE_BACKEND=django.core.cache.backends.redis.RedisCache`, `CACHE_LOCATION=redis://:<REDIS_PASSWORD>@redis:6379/0`, and `REDIS_PASSWORD` (must match `CACHE_LOCATION`). The ingest lock and watermark also live in this cache.
+
+**Background tasks** — `TASKS_BACKEND=django_tasks.backends.database.DatabaseBackend` so forced photometry runs in the `worker` service. Leave blank to run tasks inline (dev; no worker needed).
 
 **External data DBs (ClickHouse)** — `LAST_DB` (observed-fields plot) and `FORCED_PHOTOMETRY_DB` (FP tool), each a JSON object.
 
@@ -91,11 +94,28 @@ The Postgres `db` service is present but **commented out** (SQLite is the defaul
 
 Configured on the `scheduler` service (server timezone, `Asia/Jerusalem`):
 
-| Time | Job |
+| Schedule | Job |
 |---|---|
+| every 5 min | `ingest_candidates --cutoff 1` — ingest new LAST alerts (lock-guarded, watermark-gated) |
 | 06:30 | `download_tns_public_objects` — refresh the offline TNS catalog |
-| 07:00 | `ingest_candidates --cutoff 1` — ingest new LAST alerts |
+| 07:00 | `ingest_candidates --cutoff 3 --full` — daily full ingest reconcile (ignores the watermark) |
 | 07:30 | `match_candidates_to_tns` — match candidates against the catalog |
+
+## Background tasks (forced photometry)
+
+ATLAS/ZTF forced photometry is a slow, rate-limited submit-and-poll (10–20 min per
+candidate), so it does **not** run inside ingest. Instead ingest creates the candidate
++ cutouts (fast) and **enqueues** a `run_forced_photometry` task; the `worker` service
+(`db_worker`) drains the queue serially at its own pace. This keeps the 5-minute ingest
+from holding its lock while photometry trickles in later.
+
+- Requires `TASKS_BACKEND=django_tasks.backends.database.DatabaseBackend` (see Configuration) and the `worker` service running.
+- To fetch FP for candidates ingested **before** the worker existed, backfill them:
+  ```bash
+  sudo docker compose exec web uv run manage.py backfill_forced_photometry --limit 50 --dry-run
+  sudo docker compose exec web uv run manage.py backfill_forced_photometry --limit 50
+  sudo docker compose logs -f worker    # watch it drain
+  ```
 
 ## Management commands
 
@@ -105,7 +125,8 @@ Run inside the running web container:
 sudo docker compose exec web uv run manage.py <command>
 ```
 
-- `ingest_candidates [--cutoff N]` — ingest LAST alert JSON from the transients dir.
+- `ingest_candidates [--cutoff N] [--full] [--settle-seconds S]` — ingest LAST alert JSON from the transients dir. Runs every 5 min under a Redis lock (overlapping runs no-op) and a filesystem mtime watermark (skips the DB scan when nothing new landed); `--settle-seconds` (default 60) ignores files still being written. Forced photometry is enqueued to the `worker`, not run inline. `--full` ignores the watermark (the daily reconcile).
+- `backfill_forced_photometry [--limit N] [--dry-run]` — enqueue ATLAS/ZTF forced-photometry tasks for candidates that don't have ATLAS photometry yet.
 - `download_tns_public_objects` — download the public TNS catalog.
 - `match_candidates_to_tns [--dry-run]` — match candidates against the local catalog.
 - `regenerate_cutouts [--types ref,new,diff,ps1,sdss] [--limit N] [--dry-run]` — rebuild missing cutout files (`ref/new/diff` from the transients mount; `ps1/sdss` re-fetched from the web). Idempotent.

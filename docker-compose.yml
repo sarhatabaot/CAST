@@ -54,6 +54,28 @@ services:
       retries: 5
       start_period: 20s
 
+  # Drains background tasks (django-tasks database backend) — currently the deferred
+  # ATLAS/ZTF forced photometry enqueued during ingest. A single worker keeps ATLAS's
+  # rate-limit backoff from fighting parallel requests. Requires
+  # TASKS_BACKEND=django_tasks.backends.database.DatabaseBackend in .env.
+  worker:
+    build: ./app
+    container_name: cast-worker
+    restart: unless-stopped
+    command: uv run manage.py db_worker
+    volumes:
+      - ./app/:/app/
+      - ./data:/data
+      - ./app/large_files:/app/large_files
+      - media_data:/app/data
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
   scheduler:
     image: mcuadros/ofelia:latest
     container_name: cast-scheduler

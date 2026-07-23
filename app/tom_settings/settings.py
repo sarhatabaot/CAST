@@ -252,8 +252,13 @@ CACHES = {
 
 TASKS = {
     "default": {
-        # "BACKEND": "django_tasks.backends.database.DatabaseBackend"
-        "BACKEND": "django_tasks.backends.immediate.ImmediateBackend"
+        # Production sets TASKS_BACKEND to the database backend so enqueued work runs
+        # out-of-band in the `db_worker` service. The default (immediate, runs inline)
+        # keeps local dev and tests working with no worker process.
+        "BACKEND": env.str(
+            "TASKS_BACKEND",
+            default="django_tasks.backends.immediate.ImmediateBackend",
+        ),
     }
 }
 

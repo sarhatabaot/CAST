@@ -229,6 +229,85 @@ class IngestSafetyTests(TestCase):
             self.assertEqual({os.path.basename(f) for f in files2}, {"b.json"})
 
 
+@override_settings(TASKS={"default": {
+    "BACKEND": "django_tasks.backends.immediate.ImmediateBackend",
+}})
+class ForcedPhotometryTaskTests(TestCase):
+    def _make_candidate(self):
+        return Candidate.objects.create(
+            ra=123.456, dec=-45.678, discovery_datetime=timezone.now(),
+        )
+
+    @patch("candidates.tasks.get_lasair_api_token", return_value="token")
+    @patch("candidates.tasks.get_ztf_fp")
+    @patch("candidates.tasks.get_atlas_fp")
+    def test_task_runs_atlas_and_ztf(self, mock_atlas, mock_ztf, _mock_token):
+        from candidates.tasks import run_forced_photometry
+
+        candidate = self._make_candidate()
+        # ImmediateBackend runs the task on commit; execute the on-commit hook so it fires.
+        with self.captureOnCommitCallbacks(execute=True):
+            run_forced_photometry.enqueue(candidate.id)
+
+        mock_atlas.assert_called_once_with(candidate)
+        mock_ztf.assert_called_once_with(candidate)
+
+    @patch("candidates.tasks.get_lasair_api_token", return_value="")
+    @patch("candidates.tasks.get_ztf_fp")
+    @patch("candidates.tasks.get_atlas_fp")
+    def test_task_skips_ztf_without_lasair(self, mock_atlas, mock_ztf, _mock_token):
+        from candidates.tasks import run_forced_photometry
+
+        candidate = self._make_candidate()
+        with self.captureOnCommitCallbacks(execute=True):
+            run_forced_photometry.enqueue(candidate.id)
+
+        mock_atlas.assert_called_once_with(candidate)
+        mock_ztf.assert_not_called()
+
+    @patch("candidates.tasks.get_atlas_fp")
+    def test_task_noop_for_missing_candidate(self, mock_atlas):
+        from candidates.tasks import run_forced_photometry
+
+        with self.captureOnCommitCallbacks(execute=True):
+            run_forced_photometry.enqueue(999999)  # no such candidate
+        mock_atlas.assert_not_called()
+
+    @patch("candidates.tasks.run_forced_photometry")
+    @patch("candidates.ingestion.try_associate_host_galaxy")
+    @patch("candidates.ingestion.try_add_cutout")
+    @patch("candidates.ingestion.update_candidate_cutouts")
+    @patch("candidates.ingestion.add_ToO_names_to_candidate")
+    @patch("candidates.ingestion.add_photometry_from_last_report")
+    @patch("candidates.ingestion.handle_candidate_identity")
+    def test_ingest_enqueues_forced_photometry(
+        self,
+        mock_handle_candidate_identity,
+        _mock_add_photometry,
+        _mock_add_too_names,
+        _mock_update_cutouts,
+        _mock_try_add_cutout,
+        _mock_try_associate_host_galaxy,
+        mock_run_fp,
+    ):
+        candidate = self._make_candidate()
+        mock_handle_candidate_identity.return_value = (candidate, True)
+        mock_data = {
+            "at_report": {
+                "RA": {"value": 123.456},
+                "Dec": {"value": -45.678},
+                "discovery_datetime": ["2026-02-26 15:00:00 UTC"],
+            },
+            "last_report": {},
+        }
+        mock_file = BytesIO(json.dumps(mock_data).encode())
+        mock_file.name = "valid_file.json"
+
+        process_json_file(mock_file, lasair_enabled=False)
+
+        mock_run_fp.enqueue.assert_called_once_with(candidate.id)
+
+
 class ExternalApiStatusTests(TestCase):
     def setUp(self):
         cache.delete(EXTERNAL_API_STATUS_CACHE_KEY)

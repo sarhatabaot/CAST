@@ -122,15 +122,20 @@ def process_json_file(file, lasair_enabled: bool = None) -> tuple[int, Ingestion
         name_suffix="SDSS cutout",
     )
 
-    # ---- Forced photometry ----
-    # Deferred out of ingest: ATLAS/ZTF forced photometry submit-and-poll (and ATLAS
-    # rate-limiting) can take 10-20 min per candidate, which would hold the ingest lock
-    # for the whole backlog. It now runs out-of-band (Django Tasks worker); ingest just
-    # creates the candidate + cutouts so it stays fast. `lasair_enabled` is accepted for
-    # signature compatibility but no longer used here.
-
     # ---- Host galaxy association ----
     try_associate_host_galaxy(candidate)
+
+    # ---- Forced photometry (deferred) ----
+    # ATLAS/ZTF forced photometry submit-and-poll (plus ATLAS rate-limiting) can take
+    # 10-20 min per candidate, so it runs out-of-band in the db_worker rather than
+    # blocking ingest. Enqueue after the candidate is fully created; in a management
+    # command (autocommit) it's already committed, so the worker can load it. Imported
+    # lazily to avoid an import cycle. `lasair_enabled` is now unused here.
+    try:
+        from candidates.tasks import run_forced_photometry
+        run_forced_photometry.enqueue(candidate.id)
+    except Exception as e:
+        logger.warning(f"Failed to enqueue forced photometry for candidate {candidate.id}: {e}")
 
     return 1, IngestionResult.CREATED, candidate.name
 
